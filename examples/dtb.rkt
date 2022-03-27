@@ -1,8 +1,9 @@
+; Example of a user defined dtb module using dtb-module and datadef
 #lang at-exp racket/base
 
 (require db
-         "dtb-module.rkt"
-         (only-in "datadef.rkt" datadef-db-rows-func)
+         "../dtb-module.rkt"
+         (only-in "../datadef.rkt" datadef-db-rows-func)
          racket/bool
          racket/string
          racket/format
