@@ -52,17 +52,11 @@
               (raise e))))])
     (connection-pool-lease pool)))
 
-(define (dtb-connect! username database password server port)
+(define (dtb-connect!)
   (dtb-connection-pool
     (connection-pool
-      (λ ()
-         (postgresql-connect
-           #:user username
-           #:database database
-           #:password password
-           #:server server
-           #:port port))
-      #:max-connections (dtb-pooling))))
+      (λ () (sqlite3-connect #:database "examples/test.db")))))
+
 
 (define (example-func)
     (dtb-query-rows "SELECT * FROM users"))
