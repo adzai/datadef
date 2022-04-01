@@ -3,7 +3,7 @@
 
 (require db
          "../dtb-module.rkt"
-         (only-in "../datadef.rkt" datadef-db-rows-func)
+         "../datadef.rkt"
          racket/bool
          racket/string
          racket/format
@@ -63,3 +63,15 @@
            #:server server
            #:port port))
       #:max-connections (dtb-pooling))))
+
+(define (example-func)
+    (dtb-query-rows "SELECT * FROM users"))
+
+(module+ test
+  (require rackunit)
+  (test-case
+    "test case"
+    (parameterize ([dtb-mocking? #t]
+                   [dtb-mocking-data  (make-hash
+                                        `([dtb-query-rows (userinfo) (other-info)]))])
+    (check-equal? (example-func) '(userinfo)))))
