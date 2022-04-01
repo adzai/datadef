@@ -35,13 +35,22 @@
                     [connection-pool-param (create-identifier stx #'prefix "connection-pool")]
                     [prepare-name (create-identifier stx #'prefix "prepare")]
                     [disconnect-func (create-identifier stx #'prefix "disconnect!")]
+                    [mocking-param (create-identifier stx #'prefix "mocking?")]
+                    [mocking-data-param (create-identifier stx #'prefix "mocking-data")]
                     [with-connection-name (datum->syntax stx (string->symbol (format "with-~a-connection" (syntax->datum #'prefix))))]
                     [with-transaction-name (datum->syntax stx (string->symbol (format "with-~a-transaction" (syntax->datum #'prefix))))]
-                    [query-func #'(λ (func-name connection-param)
+                    [prefix-str (format "~a" (syntax->datum #'prefix))]
+                    [get-func-sym #'(λ (func-name) (string->symbol (format "~a-~a" prefix-str func-name)))]
+                    [query-func #'(λ (func-name-lst connection-param)
                                     (λ (stmt . args)
+                                       (if (mocking-param)
+                                         (let* ([data (hash-ref (mocking-data-param) (get-func-sym (cdr func-name-lst)))]
+                                                [ret (car data)])
+                                           (hash-set! (mocking-data-param) (get-func-sym (cdr func-name-lst)) (remove ret data))
+                                           ret)
                                        (with-connection-name
-                                         (apply func-name (append (list (connection-param) stmt)
-                                                                    args)))))])
+                                         (apply (car func-name-lst) (append (list (connection-param) stmt)
+                                                                    args))))))])
        #'(begin
            (define-namespace-anchor a)
            (define ns (namespace-anchor->namespace a))
@@ -57,8 +66,10 @@
            (define pooling-param (make-parameter 1))
            (define connection-param (make-parameter #f))
            (define connection-pool-param (make-parameter #f))
-           (define-values query-func-names (apply values (map (λ (func-name) (query-func func-name connection-param))
-                                                              (map (λ (x) (eval x ns)) (syntax->datum #'query-funcs)))))
+           (define mocking-param (make-parameter #f))
+           (define mocking-data-param (make-parameter (hash)))
+           (define-values query-func-names (apply values (map (λ (func-name-lst) (query-func func-name-lst connection-param))
+                                                              (map (λ (x) (cons (eval x ns) x)) (syntax->datum #'query-funcs)))))
            (define (disconnect-func)
              (when (connection? (connection-param))
                (disconnect (connection-param))))
