@@ -15,6 +15,7 @@
          racket/function
          racket/list
          racket/bool
+         (only-in "dtb-module.rkt" db-mocking? db-mocking-data)
          "datadef-utils.rkt")
 
 (define datadef-db-rows-func (make-parameter #f))
@@ -237,10 +238,20 @@
                                                                 [(not (empty? qs-args))
                                                                  (apply format qs qs-args)]
                                                                 [else qs]))
-                                   (define dtb-ret (apply
-                                                     (datadef-db-rows-func)
-                                                     final-query-string
-                                                     query-args))
+                                   (define dtb-ret
+                                     (cond
+                                       [(and (db-mocking?)
+                                             (member datadef:name (hash-keys (db-mocking-data))))
+                                        (define positions (hash-ref (db-mocking-data) datadef:name))
+                                        (define pos (if (list? positions)
+                                                      (car positions)
+                                                      (list positions)))
+                                        (hash-set! (db-mocking-data) datadef:name (remove pos positions))
+                                        (get-datadef-mock-data datadef:name pos)]
+                                       [else (apply
+                                               (datadef-db-rows-func)
+                                               final-query-string
+                                               query-args)]))
                                    (define ret ((datadef-struct-format-func datadef:name) dtb-ret json? #:custom-iter-func custom-iter-func))
                                    (if mutable
                                      (if (list? ret)
@@ -312,10 +323,20 @@
                                                       [(not (empty? qs-args))
                                                        (apply format qs qs-args)]
                                                       [else qs]))
-                         (define dtb-ret (apply
-                                           (datadef-db-rows-func)
-                                           final-query-string
-                                           query-args))
+                         (define dtb-ret
+                           (cond
+                             [(and (db-mocking?)
+                                   (member datadef:name (hash-keys (db-mocking-data))))
+                              (define positions (hash-ref (db-mocking-data) datadef:name))
+                              (define pos (if (list? positions)
+                                            (car positions)
+                                            (list positions)))
+                              (hash-set! (db-mocking-data) datadef:name (remove pos positions))
+                              (get-datadef-mock-data datadef:name pos)]
+                             [else (apply
+                                     (datadef-db-rows-func)
+                                     final-query-string
+                                     query-args)]))
                          (define ret ((datadef-struct-format-func datadef:name) dtb-ret json? #:custom-iter-func custom-iter-func))
                          (if mutable
                            (if (list? ret)
@@ -324,6 +345,14 @@
                            ret)
                          ))))]))
 
+(define (get-datadef-mock-data dd position)
+  (define pos (if (list? position) position (list position)))
+  (for/list ([p pos])
+    (for/vector ([val (datadef-struct-datadef dd)])
+          (define mock-data (caddr val))
+          (if (list? mock-data)
+            (list-ref mock-data p)
+            mock-data))))
 
 (module+ test
   (require rackunit)

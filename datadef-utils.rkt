@@ -62,30 +62,34 @@
    )
 )
 
+(define (get-datadef-key col)
+  (cond
+    [(list? col)
+     (define key (cadr col))
+     (if (eq? '_ key) (car col) key)]
+    [else col]))
+
 (define (datadef->keys datadef #:doc [doc #f])
-  (define get-datadef-key
-    (if doc last cadr))
-  (for/list ((dd datadef))
-    (cond ((symbol? dd)
-           (define str-lst
-             (string-split
-              (symbol->string dd)
-              "."))
-           (string->symbol
-            (if (> (length str-lst) 1)
-                (get-datadef-key str-lst)
-                (car str-lst))))
-          ((list? dd)
-           (cadr dd))
-          (else
-           (error "Unknown element type in datadef")))))
+  (for/list ([dd datadef])
+    (cond
+      [(symbol? dd)
+       (define str-lst
+         (string-split
+           (symbol->string dd)
+           "."))
+       (string->symbol
+         (if (> (length str-lst) 1)
+           (get-datadef-key str-lst)
+           (car str-lst)))]
+      [(list? dd)
+       (cadr dd)]
+      [else
+        (error "Unknown element type in datadef")])))
 
 (define (columns->keys columns #:doc [doc #f])
-  (define get-datadef-key
-    (if doc last cadr))
-    (for/list ((col columns))
-      (string->symbol
-       (string-replace ; For future use in React.JS
+  (for/list ((col columns))
+    (string->symbol
+      (string-replace ; For future use in React.JS
         (~a (if (list? col) (get-datadef-key col) col))
         "."
         "_"))))

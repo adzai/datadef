@@ -1,16 +1,18 @@
 ; Example of a user defined dtb module using dtb-module and datadef
-#lang at-exp racket/base
+#lang at-exp racket
 
 (require db
          "../dtb-module.rkt"
          "../datadef.rkt"
-         racket/bool
-         racket/string
-         racket/format
-         racket/list
-         racket/class)
+         racket/provide)
 
-(provide dtb-connect!)
+(provide
+  db-mocking?
+  db-mocking-data
+  (filtered-out
+    (λ (name)
+       (and (regexp-match? #rx"^dtb-" name) name))
+    (all-defined-out)))
 
 (dtb-funcs-init dtb
                 #:connection-func try-pool-connection
@@ -55,7 +57,7 @@
 (define (dtb-connect!)
   (dtb-connection-pool
     (connection-pool
-      (λ () (sqlite3-connect #:database "examples/test.db")))))
+      (λ () (sqlite3-connect #:database "test.db")))))
 
 
 (define (example-func)
@@ -65,7 +67,7 @@
   (require rackunit)
   (test-case
     "test case"
-    (parameterize ([dtb-mocking? #t]
-                   [dtb-mocking-data  (make-hash
+    (parameterize ([db-mocking? #t]
+                   [db-mocking-data  (make-hash
                                         `([dtb-query-rows (userinfo) (other-info)]))])
     (check-equal? (example-func) '(userinfo)))))

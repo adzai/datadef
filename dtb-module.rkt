@@ -8,7 +8,12 @@
                      syntax/parse
                      racket/base))
 
-(provide dtb-funcs-init)
+(provide dtb-funcs-init
+         db-mocking?
+         db-mocking-data)
+
+(define db-mocking? (make-parameter #f))
+(define db-mocking-data (make-parameter #f))
 
 (define-for-syntax (create-identifier stx prefix name)
   (datum->syntax stx (string->symbol (format "~a-~a" (syntax->datum prefix) name))))
@@ -25,51 +30,31 @@
      (with-syntax* ([query-funcs '(query-rows query-row query-list query query-exec query-maybe-row query-value query-maybe-value in-query)]
                     [query-func-names (map (λ (name) (create-identifier stx #'prefix name))
                                            (syntax->datum #'query-funcs))]
-                    [server-param (create-identifier stx #'prefix "server")]
-                    [port-param (create-identifier stx #'prefix "port")]
-                    [username-param (create-identifier stx #'prefix "username")]
-                    [password-param (create-identifier stx #'prefix "password")]
-                    [database-param (create-identifier stx #'prefix "database")]
-                    [pooling-param (create-identifier stx #'prefix "pooling")]
                     [connection-param (create-identifier stx #'prefix "connection")]
                     [connection-pool-param (create-identifier stx #'prefix "connection-pool")]
                     [prepare-name (create-identifier stx #'prefix "prepare")]
                     [disconnect-func (create-identifier stx #'prefix "disconnect!")]
-                    [mocking-param (create-identifier stx #'prefix "mocking?")]
-                    [mocking-data-param (create-identifier stx #'prefix "mocking-data")]
                     [with-connection-name (datum->syntax stx (string->symbol (format "with-~a-connection" (syntax->datum #'prefix))))]
                     [with-transaction-name (datum->syntax stx (string->symbol (format "with-~a-transaction" (syntax->datum #'prefix))))]
                     [prefix-str (format "~a" (syntax->datum #'prefix))]
                     [get-func-sym #'(λ (func-name) (string->symbol (format "~a-~a" prefix-str func-name)))]
                     [query-func #'(λ (func-name-lst connection-param)
                                     (λ (stmt . args)
-                                       (if (mocking-param)
-                                         (let* ([data (hash-ref (mocking-data-param) (get-func-sym (cdr func-name-lst)))]
+                                       (if (db-mocking?)
+                                         (let* ([data (hash-ref (db-mocking-data) (get-func-sym (cdr func-name-lst)))]
                                                 [ret (car data)])
-                                           (hash-set! (mocking-data-param) (get-func-sym (cdr func-name-lst)) (remove ret data))
+                                           (hash-set! (db-mocking-data) (get-func-sym (cdr func-name-lst)) (remove ret data))
                                            ret)
                                        (with-connection-name
                                          (apply (car func-name-lst) (append (list (connection-param) stmt)
                                                                     args))))))])
        #'(begin
-           (define-namespace-anchor a)
-           (define ns (namespace-anchor->namespace a))
-           (provide
-             (filtered-out
-               (λ (name) (and (member (string->symbol name) (syntax->datum #'query-func-names)) name))
-               (all-defined-out)))
-           (define server-param (make-parameter #f))
-           (define port-param (make-parameter #f))
-           (define username-param (make-parameter #f))
-           (define password-param (make-parameter #f))
-           (define database-param (make-parameter #f))
-           (define pooling-param (make-parameter 1))
+           (define-namespace-anchor _a)
+           (define _ns (namespace-anchor->namespace _a))
            (define connection-param (make-parameter #f))
            (define connection-pool-param (make-parameter #f))
-           (define mocking-param (make-parameter #f))
-           (define mocking-data-param (make-parameter (hash)))
            (define-values query-func-names (apply values (map (λ (func-name-lst) (query-func func-name-lst connection-param))
-                                                              (map (λ (x) (cons (eval x ns) x)) (syntax->datum #'query-funcs)))))
+                                                              (map (λ (x) (cons (eval x _ns) x)) (syntax->datum #'query-funcs)))))
            (define (disconnect-func)
              (when (connection? (connection-param))
                (disconnect (connection-param))))
@@ -94,7 +79,6 @@
                   (λ ()
                      thunk rest-transaction
                      ))))
-
             (define (prepare-name stmt)
               (prepare (connection-param) stmt))
            ))]))
