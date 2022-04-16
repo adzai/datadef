@@ -246,6 +246,7 @@
                                         (define pos (if (list? positions)
                                                       (car positions)
                                                       (list positions)))
+                                        (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
                                         (hash-set! (db-mocking-data) datadef:name (remove pos positions))
                                         (get-datadef-mock-data datadef:name pos)]
                                        [else (apply
@@ -331,6 +332,7 @@
                               (define pos (if (list? positions)
                                             (car positions)
                                             (list positions)))
+                              (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
                               (hash-set! (db-mocking-data) datadef:name (remove pos positions))
                               (get-datadef-mock-data datadef:name pos)]
                              [else (apply

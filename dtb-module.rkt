@@ -43,6 +43,7 @@
                                        (if (db-mocking?)
                                          (let* ([data (hash-ref (db-mocking-data) (get-func-sym (cdr func-name-lst)))]
                                                 [ret (car data)])
+                                           (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
                                            (hash-set! (db-mocking-data) (get-func-sym (cdr func-name-lst)) (remove ret data))
                                            ret)
                                        (with-connection-name
