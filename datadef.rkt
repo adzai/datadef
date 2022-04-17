@@ -21,6 +21,7 @@
 (define datadef-db-rows-func (make-parameter #f))
 
 (provide
+  define-conversion
   datadef-db-rows-func
 
  ; Must be re-provided for syntax stage in order to use
@@ -134,6 +135,7 @@
                     [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
                     [datadef-keys-func (if (attribute keys-strip-prefix-kw) #'datadef->keys #'columns->keys)]
                     [datadef-keys #'(datadef-keys-func datadef)]
+                    [datadef-types #'(datadef->types datadef)]
                     [datadef-doc #'(datadef-keys-func datadef #:doc #t)]
                     [format-func-ret-type (if (or (attribute single-kw)
                                                   (attribute single/f-kw))
@@ -208,60 +210,12 @@
                                 " such as " @racket[#:where] ", " @racket[#:order-by] ", " @racket[#:group-by] ", " @racket[#:limit] ". "
                                 @racket[query-string-args] " accepts a list of argument for missing parameters from the query-string
                                 itself that are represented with the placeholder ~a."})))
-                           #,(syntax/loc
-                               stx
-                               (begin
-                                 (define datadef:name
-                                   (datadef-struct datadef query-string (curry get-formatted-result datadef-keys (get-iter-func ret-datum)
-                                                                               #:single-ret-val single-ret-val?
-                                                                               #:single-ret-val/f single-ret-val/f?
-                                                                               #:ret-type ret-datum)))
-                                 (define (result-func-name #:where [query-where #f]
-                                                           #:order-by [query-order-by #f]
-                                                           #:group-by [query-group-by #f]
-                                                           #:limit [query-limit #f]
-                                                           #:query-string-args [qs-args '()]
-                                                           #:mutable [mutable #f]
-                                                           #:json [json? #f]
-                                                           #:custom-iter-func [custom-iter-func #f]
-                                                           . query-args)
-                                   (define qs (if (or query-where query-order-by query-group-by query-limit)
-                                                (build-select-query (datadef-struct-query-string datadef:name)
-                                                                    #:where query-where
-                                                                    #:order-by query-order-by
-                                                                    #:group-by query-group-by
-                                                                    #:limit query-limit)
-                                                (datadef-struct-query-string datadef:name)))
-                                   (define final-query-string (cond
-                                                                [(string? qs-args)
-                                                                 (format qs qs-args)]
-                                                                [(not (empty? qs-args))
-                                                                 (apply format qs qs-args)]
-                                                                [else qs]))
-                                   (define dtb-ret
-                                     (cond
-                                       [(and (db-mocking?)
-                                             (member datadef:name (hash-keys (db-mocking-data))))
-                                        (define positions (hash-ref (db-mocking-data) datadef:name))
-                                        (define pos (if (list? positions)
-                                                      (car positions)
-                                                      (list positions)))
-                                        (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
-                                        (hash-set! (db-mocking-data) datadef:name (remove pos positions))
-                                        (get-datadef-mock-data datadef:name pos)]
-                                       [else (apply
-                                               (datadef-db-rows-func)
-                                               final-query-string
-                                               query-args)]))
-                                   (define ret ((datadef-struct-format-func datadef:name) dtb-ret json? #:custom-iter-func custom-iter-func))
-                                   (if mutable
-                                     (if (list? ret)
-                                       (map hash-copy ret)
-                                       (hash-copy ret))
-                                     ret)
-                                   ))))))]))
+                           #,(define-datadef stx))))]))
 
 (define-syntax (define-datadef stx)
+  (define-datadef stx))
+
+(define-for-syntax (define-datadef stx)
   (syntax-parse stx
     [(_ name datadef (~or (~seq #:from from #:ret-type ret-type)
                           (~seq #:ret-type ret-type #:from from))
@@ -286,6 +240,7 @@
                     [single-ret-val? (if (attribute single-kw) #t #f)]
                     [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
                     [datadef-keys (if (attribute keys-strip-prefix-kw) #'(datadef->keys datadef) #'(columns->keys datadef))]
+                    [datadef-types #'(datadef->types datadef)]
                     [result-func-name (datum->syntax stx (string->symbol (format "datadef:~a->result" (syntax->datum #'name))))]
                     [query-string #'(build-select-query #:columns datadef
                                                         #:from from
@@ -298,7 +253,7 @@
                      stx
                      (begin
                        (define datadef:name
-                         (datadef-struct datadef query-string (curry get-formatted-result datadef-keys (get-iter-func ret-datum)
+                         (datadef-struct datadef query-string (curry get-formatted-result datadef-keys datadef-types (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum)))
