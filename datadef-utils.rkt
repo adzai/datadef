@@ -10,8 +10,10 @@
          racket/format)
 
 (provide
+  define-conversion
   build-select-query
   format-query-string
+  datadef->types
   (proc-doc/names
     datadef->keys
     (->* (list?)
@@ -39,8 +41,10 @@
     )
   (proc-doc
     get-formatted-result
-    (->i ((cols (listof symbol?)) (iter-func (-> (listof symbol?) vector? boolean? (or/c vector? list? hash?)))
-                                  (rows (listof vector?)) (json? boolean?)
+    (->i ((cols (listof symbol?)) (types (listof symbol?))
+                                  (iter-func (-> (listof symbol?) vector? boolean? (listof symbol?) (or/c vector? list? hash?)))
+                                  (rows (listof vector?))
+                                  (json? boolean?)
           #:single-ret-val (single-ret-val boolean?)
           #:single-ret-val/f (single-ret-val/f boolean?)
           #:ret-type (ret-type procedure?))
@@ -53,7 +57,7 @@
   )
   (proc-doc/names
      get-iter-func
-     (-> procedure? (-> (listof symbol?) vector? boolean? (or/c vector? list? hash?)))
+     (-> procedure? (-> (listof symbol?) vector? boolean? (listof symbol?) (or/c vector? list? hash?)))
      (ret-type)
      @{
       Returns appropriate function for iterating over db rows based on the given
@@ -61,6 +65,51 @@
      }
    )
 )
+
+
+(define/contract (register-conversion! pred proc)
+  (-> symbol? (-> any/c any) void?)
+  (hash-set! conversions pred proc))
+
+(define-syntax (define-conversion stx)
+  (syntax-case stx ()
+    ((_ predicate procedure)
+     (syntax/loc stx
+       (register-conversion!
+        predicate
+        procedure)))))
+
+(define conversions
+  (make-hash
+    `([string? . ,(λ (any) (if (string? any) any (~a any)))]
+      [number? . ,(λ (any) (cond
+                               [(number? any) any]
+                               [else (define val (string->number (~a any)))
+                                (if (number? val) val (error (format "Couldn't convert ~v to ~v" any number?)))]))]
+      [char? . ,(λ (any)
+                    (cond
+                      [(char? any) any]
+                      [else
+                        (define lst (string->list (~a any)))
+                        (if (= (length lst) 1)
+                          (car lst)
+                          (error (format "Couldn't convert ~v to char" any)))]))]
+      [bytes? . ,(λ (any) (if (bytes? any) any (string->bytes/utf-8 (~a any))))]
+      [symbol? . ,(λ (any) (if (symbol? any) any (string->symbol (~a any))))]
+      )))
+
+(define-conversion
+  'boolean?
+  (λ (any)
+     (cond
+       [(boolean? any) any]
+       [else
+         (define str (string-downcase (~a any)))
+         (cond
+           [(or (string=? str "0") (string=? str "1")) (string=? str "1")]
+           [(string=? str "true") #t]
+           [(string=? str "false") #f]
+           [else (error (format "Couldn't convert ~v to bool" any))])])))
 
 (define (get-datadef-key col)
   (cond
@@ -108,26 +157,35 @@
    strs
    ", "))
 
+(define (datadef->types lst)
+  (for/list ([elem lst])
+    (if (and (list? elem) (= (length elem) 4))
+      (cadddr elem)
+      (λ (_) #t))))
+
 (define (get-iter-func ret-type)
   (cond
     [(eq? ret-type list)
-     (λ (cols row json?)
-        (for/list ([val row])
-          (if json? (ensure-json-value val)
-            val)))]
+     (λ (cols row json? types)
+        (for/list ([val row]
+                   [type? types])
+          (define ret-val ((hash-ref conversions type?) val))
+          (if json? (ensure-json-value ret-val) ret-val)))]
     [(eq? ret-type vector)
-     (λ (cols row json?)
-        (for/vector ([val row])
-          (if json? (ensure-json-value val)
-            val)))]
+     (λ (cols row json? types)
+        (for/vector ([val row]
+                     [type? types])
+          (define ret-val ((hash-ref conversions type?) val))
+          (if json? (ensure-json-value ret-val) ret-val)))]
     [(eq? ret-type hash)
-     (λ (cols row json?)
+     (λ (cols row json? types)
         (for/hash ([col cols]
-                   [val row])
-          (values col (if json? (ensure-json-value val)
-                        val))))]))
+                   [val row]
+                   [type? types])
+          (define ret-val ((hash-ref conversions type?) val))
+          (values col (if json? (ensure-json-value ret-val) ret-val))))]))
 
-(define (get-formatted-result cols iter-func rows json?
+(define (get-formatted-result cols types iter-func rows json?
                               #:custom-iter-func [custom-iter-func #f]
                               #:single-ret-val single-ret-val?
                               #:single-ret-val/f single-ret-val/f?
@@ -135,8 +193,8 @@
  (define result
    (for/list ([row rows])
      (if custom-iter-func
-       (custom-iter-func cols row json?)
-       (iter-func cols row json?))))
+       (custom-iter-func cols row json? types)
+       (iter-func cols row json? types))))
  (cond [(and (= (length rows) 0) single-ret-val/f?)
         #f]
        [(and (= (length rows) 0) single-ret-val?) (ret-type)]

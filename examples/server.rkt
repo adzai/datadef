@@ -19,8 +19,11 @@
   (displayln (format "DATA 2: ~v" dat2))
   (response/jsexpr (make-immutable-hash `([data . ,dat1]))))
 
+
+(define-conversion 'new? (λ (any) (~a any)))
+
 (define/provide-datadef users
-  '((id _ (0 -1)) (name username ("adam" "user")) (value _ (6 777)))
+  `((id _ (0 -1) number?) (name username (adam "user") new?) (value _ (1 0) boolean?))
   #:ret-type hash
   #:from "test_table")
 
@@ -43,8 +46,8 @@
   (test-case
     "Testing users servlet"
     (parameterize ([db-mocking? #t]
-                   [db-mocking-data (make-immutable-hash `(#;(,datadef:users . ((0 1) 1))
-                                          (dtb-query-rows . ,(make-list 2 (list (vector 1 "adam" 7))))))])
+                   [db-mocking-data (make-immutable-hash `((,datadef:users . ((0 1) 1))
+                                          #;(dtb-query-rows . ,(make-list 2 (list (vector 1 "adam" 7))))))])
       (define req (make-request #"GET" (string->url "http://racket-lang.org")
                                 '() (delay #t) #f "" 1111 ""))
       (check-equal? (response-code (get-users req)) 200))))
