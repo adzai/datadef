@@ -22,10 +22,18 @@
 
 (define-conversion 'new? (λ (any) (~a any)))
 
-(define/provide-datadef users
+(define-datadef users
   `((id _ (0 -1) number?) (name username (adam "user") new?) (value _ (1 0) boolean?))
   #:ret-type hash
-  #:from "test_table")
+  #:from "test_table"
+  #:provide)
+
+(define-datadef single-user
+  '(name)
+  #:ret-type hash
+  #:from "test_table"
+  #:single-ret-val/f
+  #:where "id=$1")
 
 (define (start-server!)
   (displayln "Starting server on port 7777")
@@ -42,7 +50,19 @@
 
 (module+ test
   (require rackunit
-           net/url-structs)
+           net/url-structs
+           syntax/location)
+  (define (exported? id)
+    (define-values (_ exports) (module->exports (last (string-split (quote-source-file) "/" ))))
+      (for/or ([export exports])
+        (for/or ([e export])
+          (and (list? e) (eq? (car e) id)))))
+  (test-case
+    "Testing that datadef:users is exported"
+    (check-true (exported? 'datadef:users)))
+  (test-case
+    "Testing that datadef:single-user is not exported"
+    (check-false (exported? 'datadef:single-user)))
   (test-case
     "Testing users servlet"
     (parameterize ([db-mocking? #t]
