@@ -44,8 +44,9 @@
 
    })
   (form-doc
-    (define/provide-datadef name datadef #:from from #:ret-type ret-type
-                            [#:single-ret-val
+    (define-datadef name datadef #:from from #:ret-type ret-type
+                            [#:provide
+                             #:single-ret-val
                              #:single-ret-val/f
                              #:keys-strip-prefix
                              #:where where
@@ -69,45 +70,23 @@
       get result of @racket[dtb-query-rows] formatted with @racket[datadef-struct-format-func]
       based on the provided @racket[#:ret-type].
 
-      Scribble documentation gets created for the constant definition @racket[datadef:name] and the
+      If @racket[#:provide] keyword is provided, scribble documentation gets created for the constant definition @racket[datadef:name] and the
       @racket[datadef:name->result] function. Both are exported as well.
 
       @racket[#:single-ret-val] can be used to return only 1 value. If there are no query results,
       it returns the empty version of the provided @racket[ret-type].
+
 
       @racket[#:single-ret-val/f] will return @racket[#f] if there are no query results.
 
       The last optional argument @racket[doc-string] can be used to provide additional documentation for the datadef
       with the usual scribble syntax.
     })
-    (form-doc
-      (define-datadef name datadef #:from from #:ret-type ret-type
-                      [#:single-ret-val
-                       #:single-ret-val/f
-                       #:keys-strip-prefix
-                       #:where where
-                       #:limit limit
-                       #:order-by order-by
-                       #:group-by group-by
-                       #:sub-alias sub-alias])
-      #:contracts ([name any/c]
-                   [datadef (listof any/c)]
-                   [from string?]
-                   [ret-type (or/c list vector hash)]
-                   [where string?]
-                   [limit integer?]
-                   [order-by string?]
-                   [group-by string?]
-                   [sub-alias string?])
-      @{
-      Same as @racket[define/provide-datadef] except no provides and
-      documentation is created.
-      })
   )
 
 (struct datadef-struct (datadef query-string format-func) #:transparent)
 
-(define-syntax (define/provide-datadef stx)
+(define-syntax (define-datadef stx)
   (syntax-parse stx
     [(_ name datadef (~or (~seq #:from from #:ret-type ret-type)
                           (~seq #:ret-type ret-type #:from from))
@@ -115,6 +94,7 @@
           (~or
             (~optional (~and #:single-ret-val single-kw))
             (~optional (~and #:single-ret-val/f single/f-kw))
+            (~optional (~and #:provide provide-kw))
             (~optional (~and #:keys-strip-prefix keys-strip-prefix-kw))
             (~optional (~seq #:limit limit)
                        #:defaults ([limit #'#f]))
@@ -133,6 +113,7 @@
                     [ret-datum (syntax->datum #'ret-type)]
                     [single-ret-val? (if (attribute single-kw) #t #f)]
                     [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
+                    [provide? (if (attribute provide-kw) #t #f)]
                     [datadef-keys-func (if (attribute keys-strip-prefix-kw) #'datadef->keys #'columns->keys)]
                     [datadef-keys #'(datadef-keys-func datadef)]
                     [datadef-types #'(datadef->types datadef)]
@@ -152,106 +133,66 @@
                                                         #:limit limit)])
         (quasisyntax/loc stx
                          (begin
-                           (provide
-                             (thing-doc
-                               datadef:name
-                               datadef-struct?
-                               (#,@#'doc-string
-                                #,@#'{
-                                @paragraph[
-                                           (style #f
-                                                  (list (attributes
-                                                          '((style . "text-decoration: underline;")))))
-                                           "Query string"]
-                                @nested-flow[(make-style 'code-inset null) (map (λ (elem)
-                                                                                   (paragraph (style "RktMeta" null)
-                                                                                              elem))
-                                                                                      (format-query-string query-string))]
-                                (let ([arg-len (length (regexp-match* #px"~a" query-string))])
-                                  (if (> arg-len 0)
-                                    (~a "Query string requires " arg-len " query-string-args arguments")
-                                    ""))
-                                @paragraph[
-                                           (style #f
-                                                  (list (attributes
-                                                          '((style . "text-decoration: underline;")))))
-                                           "Keys" ]
-                                "Type: "
-                                @racket[format-func-ret-type]
-                                @itemlist[(if (or (eq? ret-datum vector)
-                                                  (eq? ret-datum list))
-                                            (map item (for/list ([str-key (map ~a datadef-doc)]
-                                                                 [num (length datadef-doc)])
+                           #,(if (syntax->datum #'provide?)
+                             #`(provide
+                               (thing-doc
+                                 datadef:name
+                                 datadef-struct?
+                                 (#,@#'doc-string
+                                  #,@#'{
+                                  @paragraph[
+                                             (style #f
+                                                    (list (attributes
+                                                            '((style . "text-decoration: underline;")))))
+                                             "Query string"]
+                                  @nested-flow[(make-style 'code-inset null) (map (λ (elem)
+                                                                                     (paragraph (style "RktMeta" null)
+                                                                                                elem))
+                                                                                        (format-query-string query-string))]
+                                  (let ([arg-len (length (regexp-match* #px"~a" query-string))])
+                                    (if (> arg-len 0)
+                                      (~a "Query string requires " arg-len " query-string-args arguments")
+                                      ""))
+                                  @paragraph[
+                                             (style #f
+                                                    (list (attributes
+                                                            '((style . "text-decoration: underline;")))))
+                                             "Keys" ]
+                                  "Type: "
+                                  @racket[format-func-ret-type]
+                                  @itemlist[(if (or (eq? ret-datum vector)
+                                                    (eq? ret-datum list))
+                                              (map item (for/list ([str-key (map ~a datadef-doc)]
+                                                                   [num (length datadef-doc)])
 
-                                                        (format "~a: ~a" num str-key) ; Explanation of the keys could be done in datadef
-                                                        ))                            ; like in partners docs for example
-                                            (map item (map symbol->string datadef-doc))
-                                            )]}))
-                             (proc-doc
-                               result-func-name
-                               (->i () (#:where [query-where (or/c false? string?)]
-                                        #:order-by [query-order-by (or/c false? string?)]
-                                        #:group-by [query-group-by (or/c false? string?)]
-                                        #:limit [query-limit (or/c false? string?)]
-                                        #:query-string-args [qs-args (listof any/c)]
-                                        #:mutable [mutable boolean?]
-                                        #:json [json? boolean?]) #:rest [query-args (listof any/c)]
-                                        [result format-func-ret-type])
-                               ([query-where #f]
-                                [query-order-by #f]
-                                [query-group-by #f]
-                                [query-limit #f]
-                                [qs-args empty]
-                                [mutable #f]
-                                [json #f])
-                               (#,@#'{
-                                "Executes the query from " @racket[datadef:name] " and returns the resulting data structure. "
-                                "The function accepts additional arguments to extend " @racket[datadef-struct-query-string]
-                                " such as " @racket[#:where] ", " @racket[#:order-by] ", " @racket[#:group-by] ", " @racket[#:limit] ". "
-                                @racket[query-string-args] " accepts a list of argument for missing parameters from the query-string
-                                itself that are represented with the placeholder ~a."})))
-                           #,(define-datadef stx))))]))
-
-(define-syntax (define-datadef stx)
-  (define-datadef stx))
-
-(define-for-syntax (define-datadef stx)
-  (syntax-parse stx
-    [(_ name datadef (~or (~seq #:from from #:ret-type ret-type)
-                          (~seq #:ret-type ret-type #:from from))
-        (~seq
-          (~or
-            (~optional (~and #:single-ret-val single-kw))
-            (~optional (~and #:single-ret-val/f single/f-kw))
-            (~optional (~and #:keys-strip-prefix keys-strip-prefix-kw))
-            (~optional (~seq #:limit limit)
-                       #:defaults ([limit #'#f]))
-            (~optional (~seq #:order-by order-by)
-                       #:defaults ([order-by #'#f]))
-            (~optional (~seq #:group-by group-by)
-                       #:defaults ([group-by #'#f]))
-            (~optional (~seq #:sub-alias sub-alias)
-                       #:defaults ([sub-alias #'#f]))
-            (~optional (~seq #:where where)
-                       #:defaults ([where #'#f])))
-          ...))
-     (with-syntax* ([datadef:name (datum->syntax stx (string->symbol (format "datadef:~a" (syntax->datum #'name))))]
-                    [ret-datum (syntax->datum #'ret-type)]
-                    [single-ret-val? (if (attribute single-kw) #t #f)]
-                    [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
-                    [datadef-keys (if (attribute keys-strip-prefix-kw) #'(datadef->keys datadef) #'(columns->keys datadef))]
-                    [datadef-types #'(datadef->types datadef)]
-                    [result-func-name (datum->syntax stx (string->symbol (format "datadef:~a->result" (syntax->datum #'name))))]
-                    [query-string #'(build-select-query #:columns datadef
-                                                        #:from from
-                                                        #:where where
-                                                        #:order-by order-by
-                                                        #:group-by group-by
-                                                        #:sub-alias sub-alias
-                                                        #:limit limit)])
-                   (syntax/loc
-                     stx
-                     (begin
+                                                          (format "~a: ~a" num str-key) ; Explanation of the keys could be done in datadef
+                                                          ))                            ; like in partners docs for example
+                                              (map item (map symbol->string datadef-doc))
+                                              )]}))
+                               (proc-doc
+                                 result-func-name
+                                 (->i () (#:where [query-where (or/c false? string?)]
+                                          #:order-by [query-order-by (or/c false? string?)]
+                                          #:group-by [query-group-by (or/c false? string?)]
+                                          #:limit [query-limit (or/c false? string?)]
+                                          #:query-string-args [qs-args (listof any/c)]
+                                          #:mutable [mutable boolean?]
+                                          #:json [json? boolean?]) #:rest [query-args (listof any/c)]
+                                          [result format-func-ret-type])
+                                 ([query-where #f]
+                                  [query-order-by #f]
+                                  [query-group-by #f]
+                                  [query-limit #f]
+                                  [qs-args empty]
+                                  [mutable #f]
+                                  [json #f])
+                                 (#,@#'{
+                                  "Executes the query from " @racket[datadef:name] " and returns the resulting data structure. "
+                                  "The function accepts additional arguments to extend " @racket[datadef-struct-query-string]
+                                  " such as " @racket[#:where] ", " @racket[#:order-by] ", " @racket[#:group-by] ", " @racket[#:limit] ". "
+                                  @racket[query-string-args] " accepts a list of argument for missing parameters from the query-string
+                                  itself that are represented with the placeholder ~a."})))
+                                  #''())
                        (define datadef:name
                          (datadef-struct datadef query-string (curry get-formatted-result datadef-keys datadef-types (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
