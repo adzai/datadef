@@ -7,7 +7,6 @@
          racket/provide)
 
 (provide
-  db-mocking?
   db-mocking-data
   (filtered-out
     (λ (name)
@@ -67,7 +66,6 @@
   (require rackunit)
   (test-case
     "test case"
-    (parameterize ([db-mocking? #t]
-                   [db-mocking-data  (make-hash
+    (parameterize ([db-mocking-data  (make-hash
                                         `([dtb-query-rows (userinfo) (other-info)]))])
     (check-equal? (example-func) '(userinfo)))))

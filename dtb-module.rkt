@@ -9,10 +9,8 @@
                      racket/base))
 
 (provide dtb-funcs-init
-         db-mocking?
          db-mocking-data)
 
-(define db-mocking? (make-parameter #f))
 (define db-mocking-data (make-parameter #f))
 
 (define-for-syntax (create-identifier stx prefix name)
@@ -40,7 +38,7 @@
                     [get-func-sym #'(λ (func-name) (string->symbol (format "~a-~a" prefix-str func-name)))]
                     [query-func #'(λ (func-name-lst connection-param)
                                     (λ (stmt . args)
-                                       (if (db-mocking?)
+                                       (if (db-mocking-data)
                                          (let* ([data (hash-ref (db-mocking-data) (get-func-sym (cdr func-name-lst)))]
                                                 [ret (car data)])
                                            (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))

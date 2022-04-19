@@ -15,7 +15,7 @@
          racket/function
          racket/list
          racket/bool
-         (only-in "dtb-module.rkt" db-mocking? db-mocking-data)
+         (only-in "dtb-module.rkt" db-mocking-data)
          "datadef-utils.rkt")
 
 (define datadef-db-rows-func (make-parameter #f))
@@ -222,7 +222,7 @@
                                                       [else qs]))
                          (define dtb-ret
                            (cond
-                             [(and (db-mocking?)
+                             [(and (db-mocking-data)
                                    (member datadef:name (hash-keys (db-mocking-data))))
                               (define positions (hash-ref (db-mocking-data) datadef:name))
                               (define pos (if (list? positions)
