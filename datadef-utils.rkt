@@ -223,19 +223,7 @@
                             #:where [where #f]
                             #:order-by [order-by #f]
                             #:group-by [group-by #f]
-                            #:limit [limit #f]
-                            #:sub-alias [sub-alias #f])
-  (when (and (not (equal? str ""))
-             (or columns tables sub-alias))
-    (cond
-      [columns (error "Query must already contain #:columns if initial string is provided")]
-      [tables (error "Query must already contain #:from if initial string is provided")]
-      [columns (error "Sub queries are not supported when initial string is provided")]))
-  (when (and (equal? str "")
-             (or (not columns)
-                 (not tables)))
-    (error "Must provide #:columns and #:from if initial string is not provided"))
-
+                            #:limit [limit #f])
   (define (format-columns columns)
     (cond
       [(false? columns) columns]
@@ -258,12 +246,9 @@
             (format-chunk "GROUP BY" group-by)
             (format-chunk "ORDER BY" order-by)
             (format-chunk "LIMIT" limit)))
-  (define result
-    (if sub-alias (format "(~a) ~a" query-string sub-alias)
-      query-string))
   (string-trim
     (regexp-replace* #px"\\s{2,}"
-                     (string-replace result "\n" " ") " "))) ; cleanup for logging purposes
+                     (string-replace query-string "\n" " ") " "))) ; cleanup for logging purposes
 
 (define (format-query-string-helper str-lst new-lst new-str current-len)
   (if (empty? str-lst)

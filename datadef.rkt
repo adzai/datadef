@@ -53,7 +53,6 @@
                              #:limit limit
                              #:order-by order-by
                              #:group-by group-by
-                             #:sub-alias sub-alias
                              doc-string])
     #:contracts ([name any/c]
                  [datadef (listof any/c)]
@@ -63,7 +62,6 @@
                  [limit integer?]
                  [order-by string?]
                  [group-by string?]
-                 [sub-alias string?]
                  [doc-string string?])
     @{
       Creates a @racket[datadef-struct] and a function @racket[datadef:name->result] to
@@ -102,8 +100,6 @@
                        #:defaults ([order-by #'#f]))
             (~optional (~seq #:group-by group-by)
                        #:defaults ([group-by #'#f]))
-            (~optional (~seq #:sub-alias sub-alias)
-                       #:defaults ([sub-alias #'#f]))
             (~optional (~seq #:where where)
                        #:defaults ([where #'#f])))
           ...)
@@ -131,13 +127,11 @@
                                                                   #:json [json? boolean?]) #:rest [query-args (listof any/c)]
                                                                   [result format-func-ret-type])]
                     [result-func-name (datum->syntax stx (string->symbol (format "datadef:~a->result" (syntax->datum #'name))))]
-
                     [query-string #'(build-select-query #:columns datadef
                                                         #:from from
                                                         #:where where
                                                         #:order-by order-by
                                                         #:group-by group-by
-                                                        #:sub-alias sub-alias
                                                         #:limit limit)])
         (quasisyntax/loc stx
                          (begin
@@ -175,8 +169,7 @@
 
                                                           (format "~a: ~a" num str-key)
                                                           ))
-                                              (map item (map symbol->string datadef-doc))
-                                              )]}))
+                                              (map item (map symbol->string datadef-doc)))]}))
                                (proc-doc
                                  result-func-name
                                  result-func-contract
@@ -242,8 +235,7 @@
                            (if (list? ret)
                              (map hash-copy ret)
                              (hash-copy ret))
-                           ret)
-                         ))))]))
+                           ret)))))]))
 
 (define (get-datadef-mock-data dd position)
   (define pos (if (list? position) position (list position)))
