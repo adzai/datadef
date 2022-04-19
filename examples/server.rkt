@@ -23,7 +23,7 @@
 (define-conversion 'new? (λ (any) (~a any)))
 
 (define-datadef users
-  `((id _ (0 -1) number?) (name username (adam "user") new?) (value _ (1 0) boolean?))
+  `((id _ (0 -1) number?) (name username (adam "user") new?) (value _ (1 0) number?))
   #:ret-type hash
   #:from "test_table"
   #:provide)
