@@ -122,6 +122,14 @@
                                                   (attribute single/f-kw))
                                             (if (attribute single/f-kw) #'(or/c false? ret-type-predicate) #'ret-type-predicate)
                                             #'(listof ret-type-predicate))]
+                    [result-func-contract #'(->i () (#:where [query-where (or/c false? string?)]
+                                                                  #:order-by [query-order-by (or/c false? string?)]
+                                                                  #:group-by [query-group-by (or/c false? string?)]
+                                                                  #:limit [query-limit (or/c false? string?)]
+                                                                  #:query-string-args [qs-args (listof any/c)]
+                                                                  #:mutable [mutable boolean?]
+                                                                  #:json [json? boolean?]) #:rest [query-args (listof any/c)]
+                                                                  [result format-func-ret-type])]
                     [result-func-name (datum->syntax stx (string->symbol (format "datadef:~a->result" (syntax->datum #'name))))]
 
                     [query-string #'(build-select-query #:columns datadef
@@ -165,20 +173,13 @@
                                               (map item (for/list ([str-key (map ~a datadef-doc)]
                                                                    [num (length datadef-doc)])
 
-                                                          (format "~a: ~a" num str-key) ; Explanation of the keys could be done in datadef
-                                                          ))                            ; like in partners docs for example
+                                                          (format "~a: ~a" num str-key)
+                                                          ))
                                               (map item (map symbol->string datadef-doc))
                                               )]}))
                                (proc-doc
                                  result-func-name
-                                 (->i () (#:where [query-where (or/c false? string?)]
-                                          #:order-by [query-order-by (or/c false? string?)]
-                                          #:group-by [query-group-by (or/c false? string?)]
-                                          #:limit [query-limit (or/c false? string?)]
-                                          #:query-string-args [qs-args (listof any/c)]
-                                          #:mutable [mutable boolean?]
-                                          #:json [json? boolean?]) #:rest [query-args (listof any/c)]
-                                          [result format-func-ret-type])
+                                 result-func-contract
                                  ([query-where #f]
                                   [query-order-by #f]
                                   [query-group-by #f]
@@ -198,7 +199,7 @@
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum)))
-                       (define (result-func-name #:where [query-where #f]
+                       (define/contract (result-func-name #:where [query-where #f]
                                                  #:order-by [query-order-by #f]
                                                  #:group-by [query-group-by #f]
                                                  #:limit [query-limit #f]
@@ -207,6 +208,7 @@
                                                  #:json [json? #f]
                                                  #:custom-iter-func [custom-iter-func #f]
                                                  . query-args)
+                          result-func-contract
                          (define qs (if (or query-where query-order-by query-group-by query-limit)
                                       (build-select-query (datadef-struct-query-string datadef:name)
                                                           #:where query-where
