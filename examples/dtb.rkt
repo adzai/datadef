@@ -13,7 +13,7 @@
        (and (regexp-match? #rx"^dtb-" name) name))
     (all-defined-out)))
 
-(dtb-funcs-init dtb
+(db-funcs-init dtb
                 #:connection-func try-pool-connection
                 #:exn-fail-thunk (λ (e)
                          (dtb-disconnect!)
