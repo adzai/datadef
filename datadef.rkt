@@ -29,9 +29,8 @@
  (for-syntax quote #%datum)
  
   (struct*-doc
-    datadef-struct
-    ([datadef (listof any/c)]
-    ([datadef (or/c symbol? (list/c (or/c symbol? string?)
+    datadef
+    ([dd (or/c symbol? (list/c (or/c symbol? string?)
                             symbol?
                             (or/c any/c (listof any/c))
                             symbol?))]
@@ -48,7 +47,7 @@
 
    })
   (form-doc
-    (define-datadef name datadef #:from from #:ret-type ret-type
+    (define-datadef name dd #:from from #:ret-type ret-type
                             [#:provide
                              #:single-ret-val
                              #:single-ret-val/f
@@ -59,7 +58,7 @@
                              #:group-by group-by
                              doc-string])
     #:contracts ([name any/c]
-                 [datadef (listof any/c)]
+                 [dd (listof any/c)]
                  [from string?]
                  [ret-type (or/c list vector hash)]
                  [where string?]
@@ -68,8 +67,8 @@
                  [group-by string?]
                  [doc-string string?])
     @{
-      Creates a @racket[datadef-struct] and a function @racket[datadef:name->result] to
-      get result of @racket[dtb-query-rows] formatted with @racket[datadef-struct-format-func]
+      Creates a @racket[datadef] and a function @racket[datadef:name->result] to
+      get result of @racket[dtb-query-rows] formatted with @racket[datadef-format-func]
       based on the provided @racket[#:ret-type].
 
       If @racket[#:provide] keyword is provided, scribble documentation gets created for the constant definition @racket[datadef:name] and the
@@ -86,11 +85,11 @@
     })
   )
 
-(struct datadef-struct (datadef query-string format-func) #:transparent)
+(struct datadef (dd query-string format-func) #:transparent)
 
 (define-syntax (define-datadef stx)
   (syntax-parse stx
-    [(_ name datadef (~or (~seq #:from from #:ret-type ret-type)
+    [(_ name dd (~or (~seq #:from from #:ret-type ret-type)
                           (~seq #:ret-type ret-type #:from from))
         (~seq
           (~or
@@ -115,9 +114,9 @@
                     [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
                     [provide? (if (attribute provide-kw) #t #f)]
                     [datadef-keys-func (if (attribute keys-strip-prefix-kw) #'datadef->keys #'columns->keys)]
-                    [datadef-keys #'(datadef-keys-func datadef)]
-                    [datadef-types #'(datadef->types datadef)]
-                    [datadef-doc #'(datadef-keys-func datadef #:doc #t)]
+                    [datadef-keys #'(datadef-keys-func dd)]
+                    [datadef-types #'(datadef->types dd)]
+                    [datadef-doc #'(datadef-keys-func dd #:doc #t)]
                     [format-func-ret-type (if (or (attribute single-kw)
                                                   (attribute single/f-kw))
                                             (if (attribute single/f-kw) #'(or/c false? ret-type-predicate) #'ret-type-predicate)
@@ -131,7 +130,7 @@
                                                                   #:json [json? boolean?]) #:rest [query-args (listof any/c)]
                                                                   [result format-func-ret-type])]
                     [result-func-name (datum->syntax stx (string->symbol (format "datadef:~a->result" (syntax->datum #'name))))]
-                    [query-string #'(build-select-query #:columns datadef
+                    [query-string #'(build-select-query #:columns dd
                                                         #:from from
                                                         #:where where
                                                         #:order-by order-by
@@ -143,7 +142,7 @@
                              #`(provide
                                (thing-doc
                                  datadef:name
-                                 datadef-struct?
+                                 datadef?
                                  (#,@#'doc-string
                                   #,@#'{
                                   @paragraph[
@@ -186,13 +185,13 @@
                                   [json #f])
                                  (#,@#'{
                                   "Executes the query from " @racket[datadef:name] " and returns the resulting data structure. "
-                                  "The function accepts additional arguments to extend " @racket[datadef-struct-query-string]
+                                  "The function accepts additional arguments to extend " @racket[datadef-query-string]
                                   " such as " @racket[#:where] ", " @racket[#:order-by] ", " @racket[#:group-by] ", " @racket[#:limit] ". "
                                   @racket[query-string-args] " accepts a list of argument for missing parameters from the query-string
                                   itself that are represented with the placeholder ~a."})))
                                   #''())
                        (define datadef:name
-                         (datadef-struct datadef query-string (curry get-formatted-result datadef-keys datadef-types (get-iter-func ret-datum)
+                         (datadef dd query-string (curry get-formatted-result datadef-keys datadef-types (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum)))
@@ -207,12 +206,12 @@
                                                  . query-args)
                           result-func-contract
                          (define qs (if (or query-where query-order-by query-group-by query-limit)
-                                      (build-select-query (datadef-struct-query-string datadef:name)
+                                      (build-select-query query-string
                                                           #:where query-where
                                                           #:order-by query-order-by
                                                           #:group-by query-group-by
                                                           #:limit query-limit)
-                                      (datadef-struct-query-string datadef:name)))
+                                      query-string))
                          (define final-query-string (cond
                                                       [(string? qs-args)
                                                        (format qs qs-args)]
@@ -234,7 +233,10 @@
                                      (datadef-db-rows-func)
                                      final-query-string
                                      query-args)]))
-                         (define ret ((datadef-struct-format-func datadef:name) dtb-ret json? #:custom-iter-func custom-iter-func))
+                         (define ret ((curry get-formatted-result datadef-keys datadef-types (get-iter-func ret-datum)
+                                                                     #:single-ret-val single-ret-val?
+                                                                     #:single-ret-val/f single-ret-val/f?
+                                                                     #:ret-type ret-datum) dtb-ret json? #:custom-iter-func custom-iter-func))
                          (if mutable
                            (if (list? ret)
                              (map hash-copy ret)
@@ -244,7 +246,7 @@
 (define (get-datadef-mock-data dd position)
   (define pos (if (list? position) position (list position)))
   (for/list ([p pos])
-    (for/vector ([val (datadef-struct-datadef dd)])
+    (for/vector ([val (datadef-dd dd)])
           (define mock-data (caddr val))
           (if (list? mock-data)
             (list-ref mock-data p)
@@ -258,9 +260,9 @@
   '(column1 column2)
     #:ret-type hash
     #:from "table")
-  (check-pred datadef-struct? datadef:test)
-  (check-equal? (datadef-struct-datadef datadef:test) '(column1 column2))
-  (check-equal? (datadef-struct-query-string datadef:test) "SELECT column1, column2 FROM table"))
+  (check-pred datadef? datadef:test)
+  (check-equal? (datadef-dd datadef:test) '(column1 column2))
+  (check-equal? (datadef-query-string datadef:test) "SELECT column1, column2 FROM table"))
   (test-case
       "Datadef with query kwargs"
     (define-datadef test
@@ -268,6 +270,6 @@
       #:ret-type hash
       #:from "table"
       #:where "x=1")
-    (check-pred datadef-struct? datadef:test)
-    (check-equal? (datadef-struct-datadef datadef:test) '(column1))
-    (check-equal? (datadef-struct-query-string datadef:test) "SELECT column1 FROM table WHERE x=1")))
+    (check-pred datadef? datadef:test)
+    (check-equal? (datadef-dd datadef:test) '(column1))
+    (check-equal? (datadef-query-string datadef:test) "SELECT column1 FROM table WHERE x=1")))
