@@ -31,6 +31,10 @@
   (struct*-doc
     datadef-struct
     ([datadef (listof any/c)]
+    ([datadef (or/c symbol? (list/c (or/c symbol? string?)
+                            symbol?
+                            (or/c any/c (listof any/c))
+                            symbol?))]
      [query-string string?]
      [format-func (->* [(or/c (listof any/c)
                                     vector?)
