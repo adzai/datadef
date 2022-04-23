@@ -186,7 +186,7 @@
                                   " such as " @racket[#:where] ", " @racket[#:order-by] ", " @racket[#:group-by] ", " @racket[#:limit] ". "
                                   @racket[query-string-args] " accepts a list of argument for missing parameters from the query-string
                                   itself that are represented with the placeholder ~a."})))
-                                  #''())
+                                  #'(void))
                        (define datadef:name
                          (datadef dd query-string (curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
