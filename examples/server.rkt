@@ -15,7 +15,7 @@
 (define (get-users req)
   (define dat1 (datadef:users->result #:json #t))
   (displayln (format "DATA 1: ~v" dat1))
-  (define dat2 (datadef:users->result #:json #t 3 #:mutable #t))
+  (define dat2 (datadef:single-user->result #:json #t 3 #:mutable #t))
   (displayln (format "DATA 2: ~v" dat2))
   (response/jsexpr (make-immutable-hash `([data . ,dat1]))))
 
@@ -32,7 +32,7 @@
   '(name)
   #:ret-type hash
   #:from "test_table"
-  #:single-ret-val/f
+  #:single-ret-val
   #:where "id=$1")
 
 (define (start-server!)
