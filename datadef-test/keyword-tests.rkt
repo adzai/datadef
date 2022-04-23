@@ -76,4 +76,15 @@
       (check-equal?
         (datadef:test->result)
         '())))
+  (test-case
+      "Testing keys-strip-prefix keyword"
+      (define-datadef test
+                      '((table.column1 _ (val1)) (table.column2 _ (val2)))
+                      #:ret-type hash
+                      #:from "table"
+                      #:single-ret-val
+                      #:keys-strip-prefix) ; TODO handle datadef->keys and columns->keys
+      (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+        (check-equal? (hash-keys (datadef:test->result) #t)
+                      '(column1 column2))))
 )
