@@ -236,8 +236,10 @@
                                                                      #:ret-type ret-datum) dtb-ret json? #:custom-iter-func custom-iter-func))
                          (if mutable
                            (if (list? ret)
-                             (map hash-copy ret)
-                             (hash-copy ret))
+                             (if (and (not (empty? ret))
+                                      (hash? (car ret)))
+                               (map hash-copy ret) ret)
+                             (if (hash? ret) (hash-copy ret) ret))
                            ret)))))]))
 
 (define (get-datadef-mock-data dd position)
