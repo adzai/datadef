@@ -269,4 +269,18 @@
       #:where "x=1")
     (check-pred datadef? datadef:test)
     (check-equal? (datadef-dd datadef:test) '(column1))
-    (check-equal? (datadef-query-string datadef:test) "SELECT column1 FROM table WHERE x=1")))
+    (check-equal? (datadef-query-string datadef:test) "SELECT column1 FROM table WHERE x=1"))
+  (test-case
+    "Testing return types"
+    ; TODO accept datadef, allow different type?
+    (define-datadef test
+    '((column1 _ (val1)) (column2 _ (val2)))
+      #:ret-type hash
+      #:from "table")
+    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+      ; List of hash
+      (check-equal? (datadef:test->result)
+                    (list #hash([column1 . val1]
+                                [column2 . val2])))
+                    ))
+  )
