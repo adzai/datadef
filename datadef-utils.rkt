@@ -118,20 +118,24 @@
      (if (eq? '_ key) (car col) key)]
     [else col]))
 
+(define (get-key-list col)
+  (define str-lst
+    (string-split
+      (symbol->string col)
+      "."))
+  (string->symbol
+    (if (> (length str-lst) 1)
+      (get-datadef-key str-lst)
+      (car str-lst))))
+
 (define (datadef->keys datadef #:doc [doc #f])
   (for/list ([dd datadef])
     (cond
-      [(symbol? dd)
-       (define str-lst
-         (string-split
-           (symbol->string dd)
-           "."))
-       (string->symbol
-         (if (> (length str-lst) 1)
-           (get-datadef-key str-lst)
-           (car str-lst)))]
+      [(symbol? dd) (get-key-list dd)]
       [(list? dd)
-       (cadr dd)]
+       (get-key-list (if (eq? '_ (cadr dd))
+                       (car dd)
+                       (cadr dd)))]
       [else
         (error "Unknown element type in datadef")])))
 
