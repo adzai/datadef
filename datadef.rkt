@@ -95,7 +95,7 @@
           (~or
             (~optional (~and #:single-ret-val single-kw))
             (~optional (~and #:single-ret-val/f single/f-kw))
-            (~optional (~and #:provide provide-kw))
+            (~optional (~and #:provide provide?))
             (~optional (~and #:keys-strip-prefix keys-strip-prefix-kw))
             (~optional (~seq #:limit limit)
                        #:defaults ([limit #'#f]))
@@ -112,10 +112,7 @@
                     [ret-datum (syntax->datum #'ret-type)]
                     [single-ret-val? (if (attribute single-kw) #t #f)]
                     [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
-                    [provide? (if (attribute provide-kw) #t #f)]
                     [datadef-keys-func (if (attribute keys-strip-prefix-kw) #'datadef->keys #'columns->keys)]
-                    [datadef-keys #'(datadef-keys-func dd)]
-                    [datadef-types #'(datadef->types dd)]
                     [datadef-doc #'(datadef-keys-func dd #:doc #t)]
                     [format-func-ret-type (if (or (attribute single-kw)
                                                   (attribute single/f-kw))
@@ -138,7 +135,7 @@
                                                         #:limit limit)])
         (quasisyntax/loc stx
                          (begin
-                           #,(if (syntax->datum #'provide?)
+                           #,(if (attribute provide?)
                              #`(provide
                                (thing-doc
                                  datadef:name
@@ -191,7 +188,7 @@
                                   itself that are represented with the placeholder ~a."})))
                                   #''())
                        (define datadef:name
-                         (datadef dd query-string (curry get-formatted-result datadef-keys datadef-types (get-iter-func ret-datum)
+                         (datadef dd query-string (curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum)))
@@ -221,19 +218,19 @@
                          (define dtb-ret
                            (cond
                              [(and (db-mocking-data)
-                                   (member datadef:name (hash-keys (db-mocking-data))))
-                              (define positions (hash-ref (db-mocking-data) datadef:name))
+                                   (member (syntax->datum #'datadef:name) (hash-keys (db-mocking-data))))
+                              (define positions (hash-ref (db-mocking-data) (syntax->datum #'datadef:name)))
                               (define pos (if (list? positions)
                                             (car positions)
                                             (list positions)))
                               (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
-                              (hash-set! (db-mocking-data) datadef:name (remove pos positions))
+                              (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (remove pos positions))
                               (get-datadef-mock-data datadef:name pos)]
                              [else (apply
                                      (datadef-db-rows-func)
                                      final-query-string
                                      query-args)]))
-                         (define ret ((curry get-formatted-result datadef-keys datadef-types (get-iter-func ret-datum)
+                         (define ret ((curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum) dtb-ret json? #:custom-iter-func custom-iter-func))

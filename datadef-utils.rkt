@@ -41,8 +41,8 @@
     )
   (proc-doc
     get-formatted-result
-    (->i ((cols (listof symbol?)) (types (listof symbol?))
-                                  (iter-func (-> (listof symbol?) vector? boolean? (listof symbol?) (or/c vector? list? hash?)))
+    (->i ((cols (listof symbol?)) (types (listof (or/c symbol? false?)))
+                                  (iter-func (-> (listof symbol?) vector? boolean? (listof (or/c symbol? false?)) (or/c vector? list? hash?)))
                                   (rows (listof vector?))
                                   (json? boolean?)
           #:single-ret-val (single-ret-val boolean?)
@@ -57,7 +57,7 @@
   )
   (proc-doc/names
      get-iter-func
-     (-> procedure? (-> (listof symbol?) vector? boolean? (listof symbol?) (or/c vector? list? hash?)))
+     (-> procedure? (-> (listof symbol?) vector? boolean? (listof (or/c symbol? false?)) (or/c vector? list? hash?)))
      (ret-type)
      @{
       Returns appropriate function for iterating over db rows based on the given
@@ -161,7 +161,7 @@
   (for/list ([elem lst])
     (if (and (list? elem) (= (length elem) 4))
       (cadddr elem)
-      (λ (_) #t))))
+      #f)))
 
 (define (get-iter-func ret-type)
   (cond
@@ -169,20 +169,20 @@
      (λ (cols row json? types)
         (for/list ([val row]
                    [type? types])
-          (define ret-val ((hash-ref conversions type?) val))
+          (define ret-val (if type? ((hash-ref conversions type?) val) val)) ; TODO cleanup conversions
           (if json? (ensure-json-value ret-val) ret-val)))]
     [(eq? ret-type vector)
      (λ (cols row json? types)
         (for/vector ([val row]
                      [type? types])
-          (define ret-val ((hash-ref conversions type?) val))
+          (define ret-val (if type? ((hash-ref conversions type?) val) val))
           (if json? (ensure-json-value ret-val) ret-val)))]
     [(eq? ret-type hash)
      (λ (cols row json? types)
         (for/hash ([col cols]
                    [val row]
                    [type? types])
-          (define ret-val ((hash-ref conversions type?) val))
+          (define ret-val (if type? ((hash-ref conversions type?) val) val))
           (values col (if json? (ensure-json-value ret-val) ret-val))))]))
 
 (define (get-formatted-result cols types iter-func rows json?
