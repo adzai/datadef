@@ -243,13 +243,16 @@
                            ret)))))]))
 
 (define (get-datadef-mock-data dd position)
-  (define pos (if (list? position) position (list position)))
-  (for/list ([p pos])
-    (for/vector ([val (datadef-dd dd)])
+  (cond
+    [(false? position) '()]
+    [else
+      (define pos (if (list? position) position (list position)))
+      (for/list ([p pos])
+        (for/vector ([val (datadef-dd dd)])
           (define mock-data (caddr val))
           (if (list? mock-data)
             (list-ref mock-data p)
-            mock-data))))
+            mock-data)))]))
 
 (module+ test
   (require rackunit)
@@ -272,17 +275,4 @@
     (check-pred datadef? datadef:test)
     (check-equal? (datadef-dd datadef:test) '(column1))
     (check-equal? (datadef-query-string datadef:test) "SELECT column1 FROM table WHERE x=1"))
-  (test-case
-    "Testing return types"
-    ; TODO accept datadef, allow different type?
-    (define-datadef test
-    '((column1 _ (val1)) (column2 _ (val2)))
-      #:ret-type hash
-      #:from "table")
-    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
-      ; List of hash
-      (check-equal? (datadef:test->result)
-                    (list #hash([column1 . val1]
-                                [column2 . val2])))
-                    ))
-  )
+)
