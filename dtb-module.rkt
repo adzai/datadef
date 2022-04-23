@@ -35,7 +35,7 @@
                     [with-transaction-name (datum->syntax stx (string->symbol (format "with-~a-transaction" (syntax->datum #'prefix))))]
                     [prefix-str (format "~a" (syntax->datum #'prefix))]
                     [get-func-sym #'(λ (func-name) (string->symbol (format "~a-~a" prefix-str func-name)))]
-                    [query-func #'(λ (func-name-lst connection-param)
+                    [query-func #'(λ (func-name-lst connection-param) ; TODO add ability to provide own connection
                                      (λ (stmt . args)
                                         (if (db-mocking-data)
                                           (let* ([data (hash-ref (db-mocking-data) (get-func-sym (cdr func-name-lst)))]
