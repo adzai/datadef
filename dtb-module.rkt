@@ -35,15 +35,15 @@
                     [with-transaction-name (datum->syntax stx (string->symbol (format "with-~a-transaction" (syntax->datum #'prefix))))]
                     [prefix-str (format "~a" (syntax->datum #'prefix))]
                     [get-func-sym #'(λ (func-name) (string->symbol (format "~a-~a" prefix-str func-name)))]
-                    [query-func #'(λ (func-name-lst connection-param) ; TODO add ability to provide own connection
-                                     (λ (stmt . args)
+                    [query-func #'(λ (func-name-lst connection-param)
+                                     (λ (stmt #:connection [user-conn #f] . args)
                                         (if (db-mocking-data)
                                           (let* ([data (hash-ref (db-mocking-data) (get-func-sym (cdr func-name-lst)))]
                                                  [ret (car data)])
                                             (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
                                             (hash-set! (db-mocking-data) (get-func-sym (cdr func-name-lst)) (remove ret data))
                                             ret)
-                                          (with-connection-name
+                                          (with-connection-name #:connection user-conn
                                             (apply (car func-name-lst) (append (list (connection-param) stmt)
                                                                                args))))))])
                    #'(begin
@@ -57,13 +57,15 @@
                          (when (connection? (connection-param))
                            (disconnect (connection-param))))
                        (define-syntax (with-connection-name stx)
-                         (syntax-case stx ()
-                           ((_ body rest-connection)
+                         (syntax-parse stx
+                           ((_ (~optional (~seq #:connection user-conn) #:defaults ([user-conn #'#f])) body rest-connection)
                             (syntax/loc stx
-                                        (let* ([owned (false? (connection-param))]
-                                               [the-conn (if owned
-                                                           (conn-func (connection-pool-param))
-                                                           (connection-param))])
+                                        (let* ([owned (and (false? user-conn) (false? (connection-param)))]
+                                               [the-conn (cond
+                                                           [user-conn user-conn]
+                                                           [owned
+                                                             (conn-func (connection-pool-param))]
+                                                           [else (connection-param)])])
                                           (parameterize ([connection-param the-conn])
                                             (with-handlers ([exn:fail? exn-fail-thunk])
                                                            (let ([ret ((thunk body rest-connection))])
