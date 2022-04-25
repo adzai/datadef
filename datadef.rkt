@@ -2,6 +2,7 @@
 
 (require (for-syntax racket/syntax
                      syntax/parse
+                     racket/bool
                      racket/base)
          scribble/srcdoc
          (for-doc scribble/manual
@@ -10,7 +11,7 @@
                   racket/base
                   racket/format
                   racket/string
-                  "datadef-utils.rkt")
+                  (only-in "datadef-utils.rkt" datadef->keys columns->keys build-select-query format-query-string))
          racket/contract
          racket/function
          racket/list
@@ -52,6 +53,9 @@
                              #:single-ret-val
                              #:single-ret-val/f
                              #:keys-strip-prefix
+                             #:camel-case
+                             #:kebab-case
+                             #:snake-case
                              #:where where
                              #:limit limit
                              #:order-by order-by
@@ -97,6 +101,9 @@
             (~optional (~and #:single-ret-val/f single/f-kw))
             (~optional (~and #:provide provide?))
             (~optional (~and #:keys-strip-prefix keys-strip-prefix-kw))
+            (~optional (~and #:kebab-case kebab-case?))
+            (~optional (~and #:camel-case camel-case?))
+            (~optional (~and #:snake-case snake-case?))
             (~optional (~seq #:limit limit)
                        #:defaults ([limit #'#f]))
             (~optional (~seq #:order-by order-by)
@@ -112,6 +119,11 @@
                     [ret-datum (syntax->datum #'ret-type)]
                     [single-ret-val? (if (attribute single-kw) #t #f)]
                     [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
+                    [case-type #`(cond
+                                   [#,(not (false? (attribute kebab-case?))) 'kebab]
+                                   [#,(not (false? (attribute camel-case?))) 'camel]
+                                   [#,(not (false? (attribute snake-case?))) 'snake]
+                                   [else 'none])]
                     [datadef-keys-func (if (attribute keys-strip-prefix-kw) #'datadef->keys #'columns->keys)]
                     [datadef-doc #'(datadef-keys-func dd #:doc #t)]
                     [format-func-ret-type (if (or (attribute single-kw)
@@ -188,7 +200,7 @@
                                   itself that are represented with the placeholder ~a."})))
                                   #'(void))
                        (define datadef:name
-                         (datadef dd query-string (curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum)
+                         (datadef dd query-string (curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum case-type)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum)))
@@ -230,7 +242,7 @@
                                      (datadef-db-rows-func)
                                      final-query-string
                                      query-args)]))
-                         (define ret ((curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum)
+                         (define ret ((curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum case-type)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum) dtb-ret json? #:custom-iter-func custom-iter-func))

@@ -4,7 +4,9 @@
          db/base
          (for-syntax racket/base)
          racket/bool
+         "key-utils.rkt"
          racket/contract
+         racket/match
          racket/list
          racket/string
          racket/format)
@@ -57,8 +59,8 @@
   )
   (proc-doc/names
      get-iter-func
-     (-> procedure? (-> (listof symbol?) vector? boolean? (listof (or/c symbol? false?)) (or/c vector? list? hash?)))
-     (ret-type)
+     (-> procedure? symbol? (-> (listof symbol?) vector? boolean? (listof (or/c symbol? false?)) (or/c vector? list? hash?)))
+     (ret-type case-type)
      @{
       Returns appropriate function for iterating over db rows based on the given
       datadef's return type.
@@ -167,7 +169,7 @@
       (cadddr elem)
       #f)))
 
-(define (get-iter-func ret-type)
+(define (get-iter-func ret-type case-type)
   (cond
     [(eq? ret-type list)
      (λ (cols row json? types)
@@ -187,7 +189,12 @@
                    [val row]
                    [type? types])
           (define ret-val (if type? ((hash-ref conversions type?) val) val))
-          (values col (if json? (ensure-json-value ret-val) ret-val))))]))
+          (define key (match case-type
+                        ['snake (any->snake-case col)]
+                        ['kebab (any->kebab-case col)]
+                        ['camel (any->camel-case col)]
+                        [_ col]))
+          (values key (if json? (ensure-json-value ret-val) ret-val))))]))
 
 (define (get-formatted-result cols types iter-func rows json?
                               #:custom-iter-func [custom-iter-func #f]
