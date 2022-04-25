@@ -5,7 +5,7 @@
            "../dtb-module.rkt"
            "../datadef.rkt")
   (test-case
-    "Testing list of hash and empty list return type"
+    "list of hash and empty list return type"
     (define-datadef test
                     '((column1 _ (val1 val2)) (column2 _ (val3 val4)))
                     #:ret-type hash
@@ -21,7 +21,7 @@
       (check-equal? (datadef:test->result)
                     '())))
   (test-case
-    "Testing hash and empty hash return type"
+    "hash and empty hash return type"
     (define-datadef test
                     '((column1 _ (val1)) (column2 _ (val2)))
                     #:ret-type hash
@@ -37,7 +37,7 @@
         (datadef:test->result)
         (hash))))
   (test-case
-    "Testing #f return type"
+    "#f return type"
     (define-datadef test
                     '(column1)
                     #:ret-type hash
@@ -47,7 +47,7 @@
       ; #f
       (check-false (datadef:test->result))))
   (test-case
-    "Testing list of lists and empty list return type"
+    "list of lists and empty list return type"
     (define-datadef test
                     '((column1 _ (val1 val2)) (column2 _ (val3 val4)))
                     #:ret-type list
@@ -62,7 +62,7 @@
         (datadef:test->result)
         '())))
   (test-case
-    "Testing list of vectors and empty list return type"
+    "list of vectors and empty list return type"
     (define-datadef test
                     '((column1 _ (val1 val2)) (column2 _ (val3 val4)))
                     #:ret-type vector
@@ -77,14 +77,47 @@
         (datadef:test->result)
         '())))
   (test-case
-      "Testing keys-strip-prefix keyword"
-      (define-datadef test
-                      '((table.column1 _ (val1)) (table.column2 _ (val2)))
-                      #:ret-type hash
-                      #:from "table"
-                      #:single-ret-val
-                      #:keys-strip-prefix) ; TODO handle datadef->keys and columns->keys
-      (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
-        (check-equal? (hash-keys (datadef:test->result) #t)
-                      '(column1 column2))))
+    "keys-strip-prefix keyword"
+    (define-datadef test
+                    '((table.column1 _ (val1)) (table.column2 _ (val2)))
+                    #:ret-type hash
+                    #:from "table"
+                    #:single-ret-val
+                    #:keys-strip-prefix) ; TODO handle datadef->keys and columns->keys
+    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+      (check-equal? (hash-keys (datadef:test->result) #t)
+                    '(column1 column2))))
+  (test-case
+    "kebab case"
+    (define-datadef test
+                    '((snake_column1 _ (val1)) (snake_column2 _ (val2)))
+                    #:ret-type hash
+                    #:from "table"
+                    #:single-ret-val
+                    #:kebab-case)
+    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+      (check-equal? (hash-keys (datadef:test->result) #t)
+                    '(snake-column1 snake-column2))))
+  (test-case
+    "snake case"
+    (define-datadef test
+                    '((snake-column1 _ (val1)) (snake-column2 _ (val2)))
+                    #:ret-type hash
+                    #:from "table"
+                    #:single-ret-val
+                    #:snake-case)
+    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+      (check-equal? (hash-keys (datadef:test->result) #t)
+                    '(snake_column1 snake_column2))))
+  (test-case
+    "camel case"
+    (define-datadef test
+                    '((snake-column1 _ (val1)) (snake-column2 _ (val2)))
+                    #:ret-type hash
+                    #:from "table"
+                    #:single-ret-val
+                    #:camel-case)
+    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+      (check-equal? (hash-keys (datadef:test->result) #t)
+                    '(snakeColumn1 snakeColumn2))))
 )
