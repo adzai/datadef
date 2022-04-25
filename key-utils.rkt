@@ -12,7 +12,6 @@
          (cons (car char-lst)
                (any->camel-case* (cdr char-lst))))))
 
-
 (define/contract (any->camel-case key)
   (-> string? string?)
   (define char-lst (string->list key))
@@ -25,9 +24,33 @@
                 [(char-upper-case? current-char)
                  (cons (char-downcase current-char) (any->camel-case* rest-chars))]
                 [(char-alphabetic? current-char) (cons current-char (any->camel-case* rest-chars))]
-                [else (loop (cadr char-lst) (cdr rest-chars))]))))
-)
+                [else (loop (cadr char-lst) (cdr rest-chars))])))))
 
+(define (any->snake/kebab-case* char-lst to-replace replacement [prev-char #f])
+  (if (empty? char-lst)
+    '()
+    (let ([func (λ (pc) (any->snake/kebab-case* (cdr char-lst) to-replace replacement pc))])
+      (cond
+        [(char=? (car char-lst) to-replace)
+         (cons replacement (func replacement))]
+        [(char-upper-case? (car char-lst))
+         (define new-char (char-downcase (car char-lst)))
+         (if (or (false? prev-char)
+                 (char=? prev-char replacement))
+           (cons new-char (func #\'))
+           (cons replacement (cons new-char (func replacement))))]
+        [else (cons (car char-lst) (func (car char-lst)))]))))
+
+(define/contract (any->snake-case key)
+  (-> string? string?)
+  (any->snake/kebab-case key #\- #\_))
+
+(define/contract (any->kebab-case key)
+  (-> string? string?)
+  (any->snake/kebab-case key #\_ #\-))
+
+(define (any->snake/kebab-case key to-replace replacement)
+  (list->string (any->snake/kebab-case* (string->list key) to-replace replacement)))
 
 (module+ test
   (require rackunit)
@@ -48,6 +71,45 @@
     (check-equal? (any->camel-case "-kebab-case")
                   "kebabCase")
     (check-equal? (any->camel-case "kebab-case")
-                  "kebabCase")
-    )
+                  "kebabCase"))
+  (test-case
+    "Conversion to snake case"
+    (check-equal? (any->snake-case "camelCase")
+                  "camel_case")
+    (check-equal? (any->snake-case "PascalCase")
+                  "pascal_case")
+    (check-equal? (any->snake-case "__--PascalCase")
+                  "____pascal_case")
+    (check-equal? (any->snake-case "snake___case")
+                  "snake___case")
+    (check-equal? (any->snake-case "snake---case")
+                  "snake___case")
+    (check-equal? (any->snake-case "snake-Case")
+                  "snake_case")
+    (check-equal? (any->snake-case "-Snake-Case")
+                  "_snake_case")
+    (check-equal? (any->snake-case "kebab-case-kebab-case")
+                  "kebab_case_kebab_case")
+    (check-equal? (any->snake-case "kebab-case-")
+                  "kebab_case_"))
+  (test-case
+    "Conversion to kebab case"
+    (check-equal? (any->kebab-case "camelCase")
+                  "camel-case")
+    (check-equal? (any->kebab-case "snake_case")
+                  "snake-case")
+    (check-equal? (any->kebab-case "PascalCase")
+                  "pascal-case")
+    (check-equal? (any->kebab-case "__--PascalCase")
+                  "----pascal-case")
+    (check-equal? (any->kebab-case "snake---case")
+                  "snake---case")
+    (check-equal? (any->kebab-case "snake___case")
+                  "snake---case")
+    (check-equal? (any->kebab-case "snake_Case")
+                  "snake-case")
+    (check-equal? (any->kebab-case "_Snake_Case")
+                  "-snake-case")
+    (check-equal? (any->kebab-case "kebab_case_")
+                  "kebab-case-"))
 )
