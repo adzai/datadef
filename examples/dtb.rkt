@@ -1,9 +1,8 @@
-; Example of a user defined dtb module using dtb-module and datadef
+; Example of a user defined dtb module using dtb and datadef
 #lang at-exp racket
 
 (require db
-         "../dtb-module.rkt"
-         "../datadef.rkt"
+         "../main.rkt"
          racket/provide)
 
 (provide

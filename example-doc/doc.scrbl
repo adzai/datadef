@@ -5,9 +5,9 @@
 @(table-of-contents)
 
 @section{Datadef}
-@defmodule["datadef.rkt"]
-@declare-exporting["../datadef.rkt"]
-@include-extracted["../datadef.rkt"]
+@defmodule[datadef]
+@declare-exporting["../main.rkt"]
+@include-extracted["../main.rkt"]
 
 @section{Auto generated documentation example}
 @defmodule["server.rkt"]

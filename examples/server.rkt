@@ -5,7 +5,7 @@
          web-server/servlet
          web-server/servlet-env
          web-server/dispatch
-         "../datadef.rkt"
+         "../main.rkt"
          "dtb.rkt")
 
 (define dispatcher

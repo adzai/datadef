@@ -2,8 +2,7 @@
 
 (module+ test
   (require rackunit
-           "../dtb-module.rkt"
-           "../datadef.rkt")
+           "../main.rkt")
   (test-case
     "list of hash and empty list return type"
     (define-datadef test
