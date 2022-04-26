@@ -4,7 +4,6 @@
 
 (define deps '("db-lib"
                "web-server-lib"
-               "lib"
                "base" "scribble-lib"))
 
 (define build-deps '("at-exp-lib"

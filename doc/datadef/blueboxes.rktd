@@ -1,5 +1,5 @@
-796
-((3) 0 () 3 ((q lib "datadef/datadef-lib/utils.rkt") (q lib "datadef/main.rkt") (q 0 . 12)) () (h ! (equal) ((c def c (c (? . 1) q datadef-query-string)) c (? . 2)) ((c def c (c (? . 0) q get-iter-func)) q (3147 . 5)) ((c def c (c (? . 0) q datadef->columns)) q (1935 . 3)) ((c def c (c (? . 0) q get-formatted-result)) q (2008 . 21)) ((c def c (c (? . 1) q datadef?)) c (? . 2)) ((c def c (c (? . 0) q columns->keys)) q (1813 . 4)) ((c def c (c (? . 1) q datadef)) c (? . 2)) ((c def c (c (? . 1) q db-mocking-data)) q (1654 . 2)) ((c form c (c (? . 1) q define-datadef)) q (560 . 24)) ((c def c (c (? . 1) q datadef-format-func)) c (? . 2)) ((c def c (c (? . 0) q datadef->keys)) q (1691 . 4)) ((c def c (c (? . 1) q struct:datadef)) c (? . 2)) ((c def c (c (? . 1) q datadef-dd)) c (? . 2))))
+795
+((3) 0 () 3 ((q lib "datadef/dd.rkt") (q 0 . 12) (q lib "datadef/lib/utils.rkt")) () (h ! (equal) ((c def c (c (? . 0) q datadef)) c (? . 1)) ((c def c (c (? . 0) q datadef?)) c (? . 1)) ((c def c (c (? . 0) q datadef-dd)) c (? . 1)) ((c def c (c (? . 2) q get-iter-func)) q (3332 . 5)) ((c def c (c (? . 2) q get-formatted-result)) q (2193 . 21)) ((q form ((lib "datadef/dtb.rkt") db-funcs-init)) q (1654 . 6)) ((c def c (c (? . 2) q datadef->keys)) q (1876 . 4)) ((c def c (c (? . 2) q datadef->columns)) q (2120 . 3)) ((c def c (c (? . 0) q struct:datadef)) c (? . 1)) ((c def c (c (? . 2) q columns->keys)) q (1998 . 4)) ((c def c (c (? . 0) q datadef-query-string)) c (? . 1)) ((c def c (c (? . 0) q datadef-format-func)) c (? . 1)) ((c form c (c (? . 0) q define-datadef)) q (560 . 24))))
 struct
 (struct datadef (dd query-string format-func)
     #:transparent)
@@ -36,8 +36,12 @@ syntax
   order-by : string?
   group-by : string?
   doc-string : string?
-value
-db-mocking-data : parameter?
+syntax
+(db-funcs-init prefix #:connection-func conn-func
+                     [#:exn-fail-thunk exn-fail-thunk])
+ 
+  prefix : any/c
+  connection-func : (-> connection-pool? connection?)
 procedure
 (datadef->keys datadef [#:doc doc]) -> (listof symbol?)
   datadef : list?

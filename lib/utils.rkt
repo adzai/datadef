@@ -12,6 +12,7 @@
          racket/format)
 
 (provide
+  get-datadef-mock-data
   define-conversion
   build-select-query
   format-query-string
@@ -290,3 +291,15 @@
       (regexp-match* #px"\\S+"
                      (string-replace (string-replace str "( " "(") " )" ")")))
     (format-query-string-helper split '() "" 0))
+
+(define (get-datadef-mock-data dd position)
+  (cond
+    [(false? position) '()]
+    [else
+      (define pos (if (list? position) position (list position)))
+      (for/list ([p pos])
+        (for/vector ([val  dd])
+          (define mock-data (caddr val))
+          (if (list? mock-data)
+            (list-ref mock-data p)
+            mock-data)))]))
