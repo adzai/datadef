@@ -15,11 +15,15 @@ the examples folder.
 
 **Generate documentation**
 
-`cd docs`
+`cd example-doc`
 
 `scribble +m doc.scrbl`
 
 `open doc.html`
+
+**Run tests**
+
+`raco test **.rkt`
 
 **Run example tests**
 
