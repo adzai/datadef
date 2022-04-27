@@ -4,9 +4,10 @@ Racket library for database data retrieval and database mocking.
 ## Requirements
 
 - [racket](https://download.racket-lang.org/)
-- [scribble](https://docs.racket-lang.org/scribble/): `raco pkg i scribble`
-- [db](https://docs.racket-lang.org/db/): `raco pkg i db`
 
+## Install
+
+`raco pkg install --auto --batch`
 
 ## Examples
 
