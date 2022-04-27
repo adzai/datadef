@@ -6,8 +6,13 @@
 
 @section{Datadef}
 @defmodule[datadef]
-@declare-exporting["../main.rkt"]
-@include-extracted["../main.rkt"]
+@declare-exporting["../dd.rkt"]
+@include-extracted["../dd.rkt"]
+
+@section{Datadef lib}
+@defmodule[datadef/lib/utils]
+@declare-exporting["../lib/utils.rkt"]
+@include-extracted["../lib/utils.rkt"]
 
 @section{Auto generated documentation example}
 @defmodule["server.rkt"]
