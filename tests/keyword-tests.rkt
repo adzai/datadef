@@ -82,7 +82,7 @@
                     #:ret-type hash
                     #:from "table"
                     #:single-ret-val
-                    #:keys-strip-prefix) ; TODO handle datadef->keys and columns->keys
+                    #:keys-strip-prefix)
     (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
       (check-equal? (hash-keys (datadef:test->result) #t)
                     '(column1 column2))))

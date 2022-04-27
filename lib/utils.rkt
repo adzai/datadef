@@ -14,12 +14,33 @@
          racket/format)
 
 (provide
+  (struct*-doc
+      datadef
+      ([parts (listof datadef-part?)]
+       [query-string string?]
+       [format-func (->* [(or/c (listof any/c)
+                                      vector?)
+                          boolean?]
+                          (or/c list? vector? hash?))])
+     #:transparent
+     @{
+
+     Datadef @racket[struct] holding information about a datadef with functions to
+     query the database and return a properly formatted data structure.
+
+     })
+  (struct*-doc
+      datadef-part
+      ([col (or/c symbol? string?)]
+       [key symbol?]
+       [mock-data (or/c false? list?)]
+       [type (or/c symbol? false?)])
+     #:transparent
+     @{})
   (proc-doc/names
-   get-datadef-mock-data
-   (-> (or/c list? symbol?)
-       (or/c (listof (or/c false? integer?))
-             (or/c false? integer?)) any)
-  (dd position)
+    parse-datadef-parts
+    (-> list? (-> symbol? symbol?) boolean? (listof datadef-part?))
+  (list-of-dd case-thunk keys-strip-prefix?)
   @{})
   (form-doc
     (define-conversion predicate procedure)
@@ -62,46 +83,16 @@
       Accepts a query string and returns a list of strings, which can be used in scribble
       documentation.
   })
-  (proc-doc/names
-    datadef->types
-    (-> list? (listof (or/c false? symbol?)))
-    (lst)
-    @{})
-  (proc-doc/names
-    datadef->keys
-    (->* (list?)
-         (#:doc boolean?)
-         (listof symbol?))
-    ((datadef)
-     ((doc #f)))
-    @{}
-    )
-  (proc-doc/names
-    columns->keys
-    (->* (list?)
-         (#:doc boolean?)
-         (listof symbol?))
-    ((columns)
-     ((doc #f)))
-    @{}
-    )
-  (proc-doc/names
-    datadef->columns
-    (-> list? string?)
-    (datadef)
-    @{
-    }
-    )
   (proc-doc
     get-formatted-result
-    (->i ((cols (listof symbol?)) (types (listof (or/c symbol? false?)))
-                                  (iter-func (-> (listof symbol?) vector? boolean? (listof (or/c symbol? false?)) (or/c vector? list? hash?)))
-                                  (rows (listof vector?))
-                                  (json? boolean?)
+    (->i ((datadef-part-list (listof datadef-part?))
+          (iter-func (-> (listof datadef-part?) vector? boolean? (or/c vector? list? hash?)))
+          (rows (listof vector?))
+          (json? boolean?)
           #:single-ret-val (single-ret-val boolean?)
           #:single-ret-val/f (single-ret-val/f boolean?)
           #:ret-type (ret-type procedure?))
-         (#:custom-iter-func (custom-iter-func (or/c false? (-> (listof symbol?) vector? boolean? (or/c vector? list? hash?)))))
+         (#:custom-iter-func (custom-iter-func (or/c false?(-> (listof datadef-part?) vector? boolean? (or/c vector? list? hash?)))))
          (result (or/c list? hash? vector? false?)))
     (#f)
     @{
@@ -110,15 +101,45 @@
   )
   (proc-doc/names
      get-iter-func
-     (-> procedure? symbol? (-> (listof symbol?) vector? boolean? (listof (or/c symbol? false?)) (or/c vector? list? hash?)))
-     (ret-type case-type)
+     (-> procedure? (-> (listof datadef-part?) vector? boolean? (or/c vector? list? hash?)))
+     (ret-type)
      @{
       Returns appropriate function for iterating over db rows based on the given
       datadef's return type.
      }
    )
+  (proc-doc/names
+       get-datadef-mock-data
+       (-> (or/c list? symbol?)
+           (or/c (listof (or/c false? integer?))
+                 (or/c false? integer?)) any)
+      (datadef-part-list position)
+      @{})
 )
 
+(struct datadef (parts query-string format-func) #:transparent)
+(struct datadef-part (col key mock-data type) #:transparent)
+
+(define (parse-datadef-parts list-of-dd case-thunk keys-strip-prefix?)
+  (define strip-prefix (if keys-strip-prefix?
+                          (λ (key) (string->symbol
+                                      (string-join (cdr (string-split (~a key) ".")) ".")))
+                          (λ (key) key)))
+  (for/list ([dd list-of-dd])
+    (cond
+      [(and (list? dd) (not (empty? dd)))
+       (define len (length dd))
+       (define 1st (car dd))
+       (define 2nd (case-thunk
+                     (strip-prefix
+                       (if (and (>= len 2)
+                                (not (eq? (cadr dd) '_)))
+                         (cadr dd) 1st))))
+       (define 3rd (if (>= len 3) (caddr dd) #f))
+       (define 4th (if (= len 4) (cadddr dd) #f))
+       (datadef-part 1st 2nd 3rd 4th)]
+    [(symbol? dd) (datadef-part dd (case-thunk (strip-prefix dd)) #f #f)]
+    [else (error (format "Expected list of a symbol, got ~v" dd))])))
 
 (define/contract (register-conversion! pred proc)
   (-> symbol? (-> any/c any) void?)
@@ -164,62 +185,6 @@
            [(string=? str "false") #f]
            [else (error (format "Couldn't convert ~v to bool" any))])])))
 
-(define (get-datadef-key col)
-  (cond
-    [(list? col)
-     (define key (cadr col))
-     (if (eq? '_ key) (car col) key)]
-    [else col]))
-
-(define (get-key-list col)
-  (define str-lst
-    (string-split
-      (symbol->string col)
-      "."))
-  (string->symbol
-    (if (> (length str-lst) 1)
-      (get-datadef-key str-lst)
-      (car str-lst))))
-
-(define (datadef->keys datadef #:doc [doc #f])
-  (for/list ([dd datadef])
-    (cond
-      [(symbol? dd) (get-key-list dd)]
-      [(list? dd)
-       (get-key-list (if (eq? '_ (cadr dd))
-                       (car dd)
-                       (cadr dd)))]
-      [else
-        (error "Unknown element type in datadef")])))
-
-(define (columns->keys columns #:doc [doc #f])
-  (for/list ((col columns))
-    (string->symbol
-      (string-replace ; For future use in React.JS
-        (~a (if (list? col) (get-datadef-key col) col))
-        "."
-        "_"))))
-
-(define (datadef->columns datadef)
-  (define strs
-    (for/list ((dd datadef))
-      (cond ((symbol? dd)
-             (symbol->string dd))
-            ((list? dd)
-             (car dd))
-            (else
-             (error "Unknown element type in datadef")))))
-  ;(writeln strs)
-  (string-join
-   strs
-   ", "))
-
-(define (datadef->types lst)
-  (for/list ([elem lst])
-    (if (and (list? elem) (= (length elem) 4))
-      (cadddr elem)
-      #f)))
-
 ; TODO add to docs that type conversion has precedence over auto json conversion
 (define (ensure-type/json type? json? val)
   (cond
@@ -227,32 +192,26 @@
     [json? (ensure-json-value val)]
     [else val]))
 
-(define (get-iter-func ret-type case-type)
+(define (get-iter-func ret-type)
   (cond
     [(eq? ret-type list)
-     (λ (cols row json? types)
+     (λ (dp-list row json?)
         (for/list ([val row]
-                   [type? types])
-          (ensure-type/json type? json? val)))]
+                   [dp dp-list])
+          (ensure-type/json (datadef-part-type dp) json? val)))]
     [(eq? ret-type vector)
-     (λ (cols row json? types)
+     (λ (dp-list row json?)
         (for/vector ([val row]
-                     [type? types])
-          (ensure-type/json type? json? val)))]
+                     [dp dp-list])
+          (ensure-type/json (datadef-part-type dp) json? val)))]
     [(eq? ret-type hash)
-     (λ (cols row json? types)
-        (for/hash ([col cols]
-                   [val row]
-                   [type? types])
-          (define key (match case-type
-                        ['snake (any->snake-case col)]
-                        ['kebab (any->kebab-case col)]
-                        ['camel (any->camel-case col)]
-                        [_ col]))
-          (values key
-                  (ensure-type/json type? json? val))))]))
+     (λ (dp-list row json?)
+        (for/hash ([val row]
+                   [dp dp-list])
+          (values (datadef-part-key dp)
+                  (ensure-type/json (datadef-part-type dp) json? val))))]))
 
-(define (get-formatted-result cols types iter-func rows json?
+(define (get-formatted-result datadef-part-list iter-func rows json?
                               #:custom-iter-func [custom-iter-func #f]
                               #:single-ret-val single-ret-val?
                               #:single-ret-val/f single-ret-val/f?
@@ -260,14 +219,26 @@
  (define result
    (for/list ([row rows])
      (if custom-iter-func
-       (custom-iter-func cols row json? types)
-       (iter-func cols row json? types))))
+       (custom-iter-func datadef-part-list row json?)
+       (iter-func datadef-part-list row json?))))
  (cond [(and (= (length rows) 0) single-ret-val/f?)
         #f]
        [(and (= (length rows) 0) single-ret-val?) (ret-type)]
        [(or single-ret-val? single-ret-val/f?)
         (car result)]
        [else result]))
+
+(define (get-datadef-mock-data datadef-part-list position)
+  (cond
+    [(false? position) '()]
+    [else
+      (define pos (if (list? position) position (list position)))
+      (for/list ([p pos])
+        (for/vector ([part datadef-part-list])
+          (define mock-data (datadef-part-mock-data part))
+          (if (list? mock-data)
+            (list-ref mock-data p)
+            mock-data)))]))
 
 (define (build-select-query [str ""]
                             #:columns [columns #f]
@@ -331,15 +302,3 @@
       (regexp-match* #px"\\S+"
                      (string-replace (string-replace str "( " "(") " )" ")")))
     (format-query-string-helper split '() "" 0))
-
-(define (get-datadef-mock-data dd position)
-  (cond
-    [(false? position) '()]
-    [else
-      (define pos (if (list? position) position (list position)))
-      (for/list ([p pos])
-        (for/vector ([val  dd])
-          (define mock-data (caddr val))
-          (if (list? mock-data)
-            (list-ref mock-data p)
-            mock-data)))]))

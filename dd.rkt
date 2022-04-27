@@ -8,13 +8,17 @@
          (for-doc scribble/manual
                   scribble/core
                   scribble/html-properties
+                  "lib/key-utils.rkt"
                   racket/base
                   racket/format
                   racket/string
-                  (only-in "lib/utils.rkt" datadef->keys columns->keys build-select-query format-query-string))
+                  "lib/utils.rkt")
          (only-in "dtb.rkt" db-mocking-data)
          racket/contract
          racket/function
+         racket/string
+         racket/format
+         "lib/key-utils.rkt"
          racket/list
          racket/bool
          "lib/utils.rkt")
@@ -22,32 +26,14 @@
 (define datadef-db-rows-func (make-parameter #f))
 
 (provide
-
   define-conversion
   datadef-db-rows-func
+  (struct-out datadef)
+  (struct-out datadef-part)
 
  ; Must be re-provided for syntax stage in order to use
  ; define/provide-datadef in racket/base modules
  (for-syntax quote #%datum)
-
-  (struct*-doc
-    datadef
-    ([dd (or/c symbol? (list/c (or/c symbol? string?)
-                            symbol?
-                            (or/c any/c (listof any/c))
-                            symbol?))]
-     [query-string string?]
-     [format-func (->* [(or/c (listof any/c)
-                                    vector?)
-                        boolean?]
-                        (or/c list? vector? hash?))])
-   #:transparent
-   @{
-
-   Datadef @racket[struct] holding information about a datadef with functions to
-   query the database and return a properly formatted data structure.
-
-   })
   (form-doc
     (define-datadef name dd #:from from #:ret-type ret-type
                             [#:provide
@@ -90,9 +76,6 @@
     })
 )
 
-; DATADEF
-(struct datadef (dd query-string format-func) #:transparent)
-
 (define-syntax (define-datadef stx)
   (syntax-parse stx
     [(_ name dd (~or (~seq #:from from #:ret-type ret-type)
@@ -121,13 +104,14 @@
                     [ret-datum (syntax->datum #'ret-type)]
                     [single-ret-val? (if (attribute single-kw) #t #f)]
                     [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
-                    [case-type #`(cond
-                                   [#,(not (false? (attribute kebab-case?))) 'kebab]
-                                   [#,(not (false? (attribute camel-case?))) 'camel]
-                                   [#,(not (false? (attribute snake-case?))) 'snake]
-                                   [else 'none])]
-                    [datadef-keys-func (if (attribute keys-strip-prefix-kw) #'datadef->keys #'columns->keys)]
-                    [datadef-doc #'(datadef-keys-func dd #:doc #t)]
+                    [case-thunk #`(cond
+                                                       [#,(not (false? (attribute kebab-case?))) any->kebab-case]
+                                                       [#,(not (false? (attribute camel-case?))) any->camel-case]
+                                                       [#,(not (false? (attribute snake-case?))) any->snake-case]
+                                                       [else (λ (key) key)])]
+                    [keys-strip-prefix? (if (attribute keys-strip-prefix-kw) #t #f)]
+                    [datadef-part-list #'(parse-datadef-parts dd case-thunk keys-strip-prefix?)]
+                    [datadef-doc #'(map (λ (dp) (datadef-part-key dp)) datadef-part-list)]
                     [format-func-ret-type (if (or (attribute single-kw)
                                                   (attribute single/f-kw))
                                             (if (attribute single/f-kw) #'(or/c false? ret-type-predicate) #'ret-type-predicate)
@@ -202,7 +186,7 @@
                                   itself that are represented with the placeholder ~a."})))
                                   #'(void))
                        (define datadef:name
-                         (datadef dd query-string (curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum case-type)
+                         (datadef datadef-part-list query-string (curry get-formatted-result datadef-part-list (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum)))
@@ -239,12 +223,12 @@
                                             (list positions)))
                               (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
                               (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (remove pos positions))
-                              (get-datadef-mock-data (datadef-dd datadef:name) pos)]
+                              (get-datadef-mock-data datadef-part-list pos)]
                              [else (apply
                                      (datadef-db-rows-func)
                                      final-query-string
                                      query-args)]))
-                         (define ret ((curry get-formatted-result (datadef-keys-func dd) (datadef->types dd) (get-iter-func ret-datum case-type)
+                         (define ret ((curry get-formatted-result datadef-part-list (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
                                                                      #:ret-type ret-datum) dtb-ret json? #:custom-iter-func custom-iter-func))
@@ -256,7 +240,6 @@
                              (if (hash? ret) (hash-copy ret) ret))
                            ret)))))]))
 
-
 (module+ test
   (require rackunit)
   (test-case
@@ -266,16 +249,18 @@
     #:ret-type hash
     #:from "table")
   (check-pred datadef? datadef:test)
-  (check-equal? (datadef-dd datadef:test) '(column1 column2))
+  (check-equal? (datadef-part-col (cadr (datadef-parts datadef:test))) 'column2)
   (check-equal? (datadef-query-string datadef:test) "SELECT column1, column2 FROM table"))
   (test-case
       "Datadef with query kwargs"
     (define-datadef test
-     '(column1)
+     '(table.column_key)
       #:ret-type hash
       #:from "table"
+      #:camel-case
+      #:keys-strip-prefix
       #:where "x=1")
     (check-pred datadef? datadef:test)
-    (check-equal? (datadef-dd datadef:test) '(column1))
-    (check-equal? (datadef-query-string datadef:test) "SELECT column1 FROM table WHERE x=1"))
+    (check-equal? (datadef-part-key (car (datadef-parts datadef:test))) 'columnKey)
+    (check-equal? (datadef-query-string datadef:test) "SELECT table.column_key FROM table WHERE x=1"))
 )
