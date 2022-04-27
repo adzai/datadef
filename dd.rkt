@@ -169,13 +169,13 @@
                                     (if (> arg-len 0)
                                       (~a "Query string requires " arg-len " query-string-args arguments")
                                       ""))
+                                  "Type: "
+                                  @racket[format-func-ret-type]
                                   @paragraph[
                                              (style #f
                                                     (list (attributes
                                                             '((style . "text-decoration: underline;")))))
-                                             "Keys" ]
-                                  "Type: "
-                                  @racket[format-func-ret-type]
+                                             "Keys"]
                                   @itemlist[(if (or (eq? ret-datum vector)
                                                     (eq? ret-datum list))
                                               (map item (for/list ([str-key (map ~a datadef-doc)]
