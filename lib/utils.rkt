@@ -7,6 +7,7 @@
          (for-doc scribble/manual)
          racket/bool
          "key-utils.rkt"
+         "json-utils.rkt"
          racket/contract
          racket/match
          racket/list
@@ -220,32 +221,32 @@
       (cadddr elem)
       #f)))
 
+(define (ensure-type type? val)
+  (if type? ((hash-ref conversions type?) val) val))
+
 (define (get-iter-func ret-type case-type)
   (cond
     [(eq? ret-type list)
      (λ (cols row json? types)
         (for/list ([val row]
                    [type? types])
-          (define ret-val (if type? ((hash-ref conversions type?) val) val)) ; TODO cleanup conversions
-          (if json? (ensure-json-value ret-val) ret-val)))]
+          (ensure-type type? (if json? (ensure-json-value val) val))))]
     [(eq? ret-type vector)
      (λ (cols row json? types)
         (for/vector ([val row]
                      [type? types])
-          (define ret-val (if type? ((hash-ref conversions type?) val) val))
-          (if json? (ensure-json-value ret-val) ret-val)))]
+          (ensure-type type? (if json? (ensure-json-value val) val))))]
     [(eq? ret-type hash)
      (λ (cols row json? types)
         (for/hash ([col cols]
                    [val row]
                    [type? types])
-          (define ret-val (if type? ((hash-ref conversions type?) val) val))
           (define key (match case-type
                         ['snake (any->snake-case col)]
                         ['kebab (any->kebab-case col)]
                         ['camel (any->camel-case col)]
                         [_ col]))
-          (values key (if json? (ensure-json-value ret-val) ret-val))))]))
+          (values key (ensure-type type? (if json? (ensure-json-value val) val)))))]))
 
 (define (get-formatted-result cols types iter-func rows json?
                               #:custom-iter-func [custom-iter-func #f]
@@ -263,21 +264,6 @@
        [(or single-ret-val? single-ret-val/f?)
         (car result)]
        [else result]))
-
-
-; TODO add conversions for sql dates
-(define (ensure-json-value val)
-  (cond
-    [(sql-null? val) 'null]
-    [(integer? val) val]
-    [(rational? val) (exact->inexact val)]
-    [(list? val) (for/list ([el val]) (ensure-json-value el))]
-    [(hash? val) (for/hash ([(k v) val]) (values
-                                          (if (symbol? k) k
-                                              (string->symbol (~a k)))
-                                          (ensure-json-value v)))]
-    [else val]))
-
 
 (define (build-select-query [str ""]
                             #:columns [columns #f]
