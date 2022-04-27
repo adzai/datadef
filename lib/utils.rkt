@@ -1,8 +1,10 @@
 #lang at-exp racket/base
 
 (require scribble/srcdoc
+         scribble/core
          db/base
          (for-syntax racket/base)
+         (for-doc scribble/manual)
          racket/bool
          "key-utils.rkt"
          racket/contract
@@ -12,11 +14,59 @@
          racket/format)
 
 (provide
-  get-datadef-mock-data
-  define-conversion
-  build-select-query
-  format-query-string
-  datadef->types
+  (proc-doc/names
+   get-datadef-mock-data
+   (-> (or/c list? symbol?)
+       (or/c (listof (or/c false? integer?))
+             (or/c false? integer?)) any)
+  (dd position)
+  @{})
+  (form-doc
+    (define-conversion predicate procedure)
+    #:contracts ([predicate symbol?]
+                 [procedure (-> any/c any)])
+    @{})
+  (proc-doc/names
+      build-select-query
+    (->* []
+         [string?
+          #:columns (or/c string? (listof any/c))
+          #:from (or/c false? string?)
+          #:where (or/c false? string?)
+          #:order-by (or/c false? string?)
+          #:group-by (or/c false? string?)
+          #:limit (or/c false? integer?)]
+         string?)
+    ([]
+     ([str ""]
+      [columns #f]
+      [tables #f]
+      [where #f]
+      [order-by #f]
+      [group-by #f]
+      [limit #f]))
+    @{
+    Creates a query @racket[string] based on provided arguments.
+    @racket[#:columns] and @racket[#:from] must be provided if initial string
+    (@racket[str]) is not supplied.
+    If @racket[str] is provided, @racket[#:columns] and @racket[#:from] must
+    not be supplied.
+
+    @racket[#:columns] can be a string or a datadef.
+  })
+  (proc-doc/names
+      format-query-string
+      (-> string? (listof string?))
+      (str)
+      @{
+      Accepts a query string and returns a list of strings, which can be used in scribble
+      documentation.
+  })
+  (proc-doc/names
+    datadef->types
+    (-> list? (listof (or/c false? symbol?)))
+    (lst)
+    @{})
   (proc-doc/names
     datadef->keys
     (->* (list?)
