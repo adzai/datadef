@@ -2,7 +2,6 @@
 
 (require scribble/srcdoc
          scribble/core
-         db/base
          (for-syntax racket/base)
          (for-doc scribble/manual)
          racket/bool
@@ -221,8 +220,12 @@
       (cadddr elem)
       #f)))
 
-(define (ensure-type type? val)
-  (if type? ((hash-ref conversions type?) val) val))
+; TODO add to docs that type conversion has precedence over auto json conversion
+(define (ensure-type/json type? json? val)
+  (cond
+    [type? ((hash-ref conversions type?) val)]
+    [json? (ensure-json-value val)]
+    [else val]))
 
 (define (get-iter-func ret-type case-type)
   (cond
@@ -230,12 +233,12 @@
      (λ (cols row json? types)
         (for/list ([val row]
                    [type? types])
-          (ensure-type type? (if json? (ensure-json-value val) val))))]
+          (ensure-type/json type? json? val)))]
     [(eq? ret-type vector)
      (λ (cols row json? types)
         (for/vector ([val row]
                      [type? types])
-          (ensure-type type? (if json? (ensure-json-value val) val))))]
+          (ensure-type/json type? json? val)))]
     [(eq? ret-type hash)
      (λ (cols row json? types)
         (for/hash ([col cols]
@@ -246,7 +249,8 @@
                         ['kebab (any->kebab-case col)]
                         ['camel (any->camel-case col)]
                         [_ col]))
-          (values key (ensure-type type? (if json? (ensure-json-value val) val)))))]))
+          (values key
+                  (ensure-type/json type? json? val))))]))
 
 (define (get-formatted-result cols types iter-func rows json?
                               #:custom-iter-func [custom-iter-func #f]
