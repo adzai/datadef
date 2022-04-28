@@ -3,12 +3,16 @@
 (require db/base
          racket/bool
          racket/function
+         racket/list
+         racket/match
          scribble/srcdoc
+         "lib/utils.rkt"
          (for-syntax racket/syntax
                      syntax/parse
                      racket/base))
 
 (provide
+  with-mock-data
   db-mocking-data
   (form-doc
     (db-funcs-init prefix #:connection-func conn-func
@@ -20,6 +24,57 @@
 )
 
 (define db-mocking-data (make-parameter #f))
+
+; SPEC
+#; (with-mock-data
+  '((datadef:test 0 1 2 3)
+    (dtb-query-rows (("test" 1 2 3) (4 5 6 5)) 0 0 0 0))
+  (check-equal?))
+
+(define (group-mock-data data-list positions)
+  (define positions-list (if (list? positions)
+                           positions
+                           (list positions)))
+  (for/list ([pos positions-list])
+    (for/list ([data data-list])
+      (list-ref data pos))))
+
+ (define (parse-datadef-part dd part)
+   (define len (length part))
+   (match len
+     [0 (db-mock #f (void))]
+     [1 (db-mock #f (car part))]
+     [2 (db-mock (car part) (cadr part))]
+     [_ (error (format "Wrong number of args, part: ~a" part))] ; TODO better err msg
+))
+
+(define (parse-db-part data)
+  (cond
+    [(and (list? data) (= (length data) 1))
+     (define dat (if (list? (car (car data))) (car data) (map list (car data))))
+     (db-mock dat (void))]
+    [(and (list? data) (= (length data) 2))
+     (define dat (if (list? (car (car data))) (car data) (map list (car data))))
+      (db-mock dat (cadr data))]
+    [else (error (format "Wrong number of args, data: ~a" data))])) ; TODO better err msg
+
+
+(define (set-mock-data! mock-data-list)
+  (for ([part mock-data-list])
+    (define key (car part))
+    (define mock (if (regexp-match? #rx"datadef:" (symbol->string key))
+      (parse-datadef-part key (cdr part))
+      (parse-db-part (cdr part))))
+    (hash-set! (db-mocking-data) key mock)))
+
+(define-syntax (with-mock-data stx)
+  (syntax-parse stx
+    [(_ (mock-data ...) body ...)
+     (with-syntax ([mock-data-list #'(syntax->datum #'(mock-data ...))])
+       #'(begin
+           (parameterize ([db-mocking-data (make-hash)])
+             (set-mock-data! mock-data-list)
+             body ...)))]))
 
 (define-for-syntax (create-identifier stx prefix name)
   (datum->syntax stx (string->symbol (format "~a-~a" (syntax->datum prefix) name))))
@@ -47,11 +102,22 @@
                     [query-func #'(λ (func-name-lst connection-param)
                                      (λ (stmt #:connection [user-conn #f] . args)
                                         (if (db-mocking-data)
-                                          (let* ([data (hash-ref (db-mocking-data) (get-func-sym (cdr func-name-lst)))]
-                                                 [ret (car data)])
-                                            (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
-                                            (hash-set! (db-mocking-data) (get-func-sym (cdr func-name-lst)) (remove ret data))
-                                            ret)
+                                          (let* ([mock (hash-ref (db-mocking-data) (get-func-sym (cdr func-name-lst)))]
+                                                 [positions (db-mock-positions mock)]
+                                                 [pos (cond
+                                                        [(list? positions)
+                                                        (car positions)]
+                                                        [(void? positions) '(0)]
+                                                        [(false? positions) #f]
+                                                        [else (list positions)])]
+                                                [data (car (db-mock-data mock))]
+                                                [rest-data (cdr (db-mock-data mock))])
+                                            (unless (void? positions)
+                                              (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (db-mock rest-data (if (and (list? positions)
+                                                                                                                                           (not (empty? positions)))
+                                                                                                                                    (remove pos positions)
+                                                                                                                                    positions))))
+                                            (get-mock-data data pos))
                                           (with-connection-name #:connection user-conn
                                             (apply (car func-name-lst) (append (list (connection-param) stmt)
                                                                                args))))))])

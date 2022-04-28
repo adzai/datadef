@@ -63,8 +63,9 @@
     (check-false (exported? 'datadef:single-user)))
   (test-case
     "Testing users servlet"
-    (parameterize ([db-mocking-data (make-immutable-hash `((datadef:users . ((0 1) 1))
-                                          #;(dtb-query-rows . ,(make-list 2 (list (vector 1 "adam" 7))))))])
+    #| (parameterize ([db-mocking-data (make-immutable-hash `(#;(datadef:users . ((0 1) 1)) |#
+    #|                                       (dtb-query-rows . ,(make-list 2 (list (vector 1 "adam" 7))))))]) |#
+      (with-mock-data ((dtb-query-rows ((1 "adam" 7)) (0 0)))
       (define req (make-request #"GET" (string->url "http://racket-lang.org")
                                 '() (delay #t) #f "" 1111 ""))
       (check-equal? (response-code (get-users req)) 200))))

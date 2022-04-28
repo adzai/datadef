@@ -216,18 +216,38 @@
                          (define dtb-ret
                            (cond
                              [(and (db-mocking-data)
-                                   (member (syntax->datum #'datadef:name) (hash-keys (db-mocking-data))))
-                              (define positions (hash-ref (db-mocking-data) (syntax->datum #'datadef:name)))
-                              (define pos (if (list? positions)
-                                            (car positions)
-                                            (list positions)))
-                              (when (immutable? (db-mocking-data)) (db-mocking-data (hash-copy (db-mocking-data))))
-                              (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (remove pos positions))
-                              (get-datadef-mock-data datadef-part-list pos)]
-                             [else (apply
-                                     (datadef-db-rows-func)
-                                     final-query-string
-                                     query-args)]))
+                                   (hash-has-key? (db-mocking-data) (syntax->datum #'datadef:name)))
+                              (define mock (hash-ref (db-mocking-data) (syntax->datum #'datadef:name)))
+                              (define positions (db-mock-positions mock))
+                              (define pos (cond
+                                            [(list? positions)
+                                            (car positions)]
+                                            [(void? positions) '(0)]
+                                            [(false? positions) #f]
+                                            [else (list positions)]))
+                              (if (db-mock-data mock)
+                                (let ([data (car (db-mock-data mock))]
+                                      [rest-data (cdr (db-mock-data mock))])
+                                  (unless (void? positions)
+                                    (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (db-mock rest-data (if (and (list? positions)
+                                                                                                                                (not (empty? positions)))
+                                                                                                                          (remove pos positions)
+                                                                                                                          positions))))
+                                  (get-mock-data rest-data pos))
+                                (begin
+                                  (unless (void? positions)
+                                    (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (db-mock (db-mock-data mock) (if (and (list? positions)
+                                                                                                                                (not (empty? positions)))
+                                                                                                                          (remove pos positions)
+                                                                                                                          positions))))
+                                  (get-mock-data (datadef-parts datadef:name) pos)))
+                              ]
+                             [(datadef-db-rows-func)
+                              (apply
+                                (datadef-db-rows-func)
+                                final-query-string
+                                query-args)]
+                             [else (error "mock data nor datadef-db-rows-func not set")]))
                          (define ret ((curry get-formatted-result datadef-part-list (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?

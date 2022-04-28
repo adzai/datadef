@@ -9,7 +9,7 @@
                     '((column1 _ (val1 val2)) (column2 _ (val3 val4)))
                     #:ret-type hash
                     #:from "table")
-    (parameterize ([db-mocking-data #hash([datadef:test . ((0 1) #f)])])
+    (with-mock-data ((datadef:test ((0 1) #f)))
       ; List of hash
       (check-equal? (datadef:test->result)
                     `(,#hash([column1 . val1]
@@ -26,7 +26,7 @@
                     #:ret-type hash
                     #:from "table"
                     #:single-ret-val)
-    (parameterize ([db-mocking-data #hash([datadef:test . (0 #f)])])
+         (with-mock-data ((datadef:test (0 #f)))
       ; Hash
       (check-equal? (datadef:test->result)
                     #hash([column1 . val1]
@@ -42,7 +42,7 @@
                     #:ret-type hash
                     #:from "table"
                     #:single-ret-val/f)
-    (parameterize ([db-mocking-data #hash([datadef:test . (#f)])])
+    (with-mock-data ((datadef:test (#f)))
       ; #f
       (check-false (datadef:test->result))))
   (test-case
@@ -51,7 +51,7 @@
                     '((column1 _ (val1 val2)) (column2 _ (val3 val4)))
                     #:ret-type list
                     #:from "table")
-    (parameterize ([db-mocking-data #hash([datadef:test . ((0 1) #f)])])
+    (with-mock-data ((datadef:test ((0 1) #f)))
       ; List of lists
       (check-equal?
         (datadef:test->result)
@@ -66,7 +66,7 @@
                     '((column1 _ (val1 val2)) (column2 _ (val3 val4)))
                     #:ret-type vector
                     #:from "table")
-    (parameterize ([db-mocking-data #hash([datadef:test . ((0 1) #f)])])
+    (with-mock-data ((datadef:test ((0 1) #f)))
       ; List of vectors
       (check-equal?
         (datadef:test->result)
@@ -83,7 +83,7 @@
                     #:from "table"
                     #:single-ret-val
                     #:keys-strip-prefix)
-    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+    (with-mock-data ((datadef:test  (0)))
       (check-equal? (hash-keys (datadef:test->result) #t)
                     '(column1 column2))))
   (test-case
@@ -94,7 +94,7 @@
                     #:from "table"
                     #:single-ret-val
                     #:kebab-case)
-    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+    (with-mock-data ((datadef:test (0)))
       (check-equal? (hash-keys (datadef:test->result) #t)
                     '(snake-column1 snake-column2))))
   (test-case
@@ -105,7 +105,7 @@
                     #:from "table"
                     #:single-ret-val
                     #:snake-case)
-    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+    (with-mock-data ((datadef:test (0)))
       (check-equal? (hash-keys (datadef:test->result) #t)
                     '(snake_column1 snake_column2))))
   (test-case
@@ -116,7 +116,7 @@
                     #:from "table"
                     #:single-ret-val
                     #:camel-case)
-    (parameterize ([db-mocking-data #hash([datadef:test . (0)])])
+    (with-mock-data ((datadef:test . (0)))
       (check-equal? (hash-keys (datadef:test->result) #t)
                     '(snakeColumn1 snakeColumn2))))
 )

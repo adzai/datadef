@@ -6,7 +6,6 @@
          racket/provide)
 
 (provide
-  db-mocking-data
   (filtered-out
     (λ (name)
        (and (regexp-match? #rx"^dtb-" name) name))
@@ -59,12 +58,11 @@
 
 
 (define (example-func)
-    (dtb-query-rows "SELECT * FROM users"))
+  (dtb-query-rows "SELECT * FROM users"))
 
 (module+ test
   (require rackunit)
   (test-case
     "test case"
-    (parameterize ([db-mocking-data  (make-hash
-                                        `([dtb-query-rows (userinfo) (other-info)]))])
-    (check-equal? (example-func) '(userinfo)))))
+    (with-mock-data ((dtb-query-rows (userinfo other-info) (0)))
+      (check-equal? (example-func) '(#(userinfo))))))

@@ -37,6 +37,7 @@
        [type (or/c symbol? false?)])
      #:transparent
      @{})
+  (struct-out db-mock)
   (proc-doc/names
     parse-datadef-parts
     (-> list? (-> symbol? symbol?) boolean? (listof datadef-part?))
@@ -109,8 +110,8 @@
      }
    )
   (proc-doc/names
-       get-datadef-mock-data
-       (-> (or/c list? symbol?)
+       get-mock-data
+       (-> (or/c (listof datadef-part?) (listof any/c))
            (or/c (listof (or/c false? integer?))
                  (or/c false? integer?)) any)
       (datadef-part-list position)
@@ -119,6 +120,7 @@
 
 (struct datadef (parts query-string format-func) #:transparent)
 (struct datadef-part (col key mock-data type) #:transparent)
+(struct db-mock (data positions) #:transparent)
 
 (define (parse-datadef-parts list-of-dd case-thunk keys-strip-prefix?)
   (define strip-prefix (if keys-strip-prefix?
@@ -228,14 +230,14 @@
         (car result)]
        [else result]))
 
-(define (get-datadef-mock-data datadef-part-list position)
+(define (get-mock-data data-list position)
   (cond
     [(false? position) '()]
     [else
       (define pos (if (list? position) position (list position)))
       (for/list ([p pos])
-        (for/vector ([part datadef-part-list])
-          (define mock-data (datadef-part-mock-data part))
+        (for/vector ([part data-list])
+          (define mock-data (if (datadef-part? part) (datadef-part-mock-data part) part))
           (if (list? mock-data)
             (list-ref mock-data p)
             mock-data)))]))
