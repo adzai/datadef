@@ -68,4 +68,22 @@
       (with-mock-data ((dtb-query-rows ((1 "adam" 7)) (0 0)))
       (define req (make-request #"GET" (string->url "http://racket-lang.org")
                                 '() (delay #t) #f "" 1111 ""))
-      (check-equal? (response-code (get-users req)) 200))))
+      (check-equal? (response-code (get-users req)) 200)))
+  (test-case "db mock with #:datadef"
+      (define-datadef test
+                      '((column1 _ (val1)) (column2 _ (val2)))
+                      #:ret-type hash
+                      #:from "table")
+      (with-mock-data ((dtb-query-rows ((1 2 3)) (0)))
+                      #:datadef
+         (check-equal? (datadef:test->result)
+                      `(,#hash([column1 . val1]
+                               [column2 . val2])))
+         (check-equal? (list (vector 1 2 3)) (dtb-query-rows "SELECT * FROM TEST")))
+      (with-mock-data #:datadef
+                    ((dtb-query-rows ((1 2 3)) (0)))
+         (check-equal? (datadef:test->result)
+                      `(,#hash([column1 . val1]
+                               [column2 . val2])))
+         (check-equal? (list (vector 1 2 3)) (dtb-query-rows "SELECT * FROM TEST"))))
+)

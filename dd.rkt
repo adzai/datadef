@@ -17,7 +17,9 @@
          racket/contract
          racket/function
          racket/string
+         racket/stream
          racket/format
+         "lib/test-utils.rkt"
          "lib/key-utils.rkt"
          racket/list
          racket/bool
@@ -213,6 +215,12 @@
                                                       [(not (empty? qs-args))
                                                        (apply format qs qs-args)]
                                                       [else qs]))
+                         (when (and (hash-ref (db-mocking-data) 'datadef #f)
+                                    (false? (hash-has-key? (db-mocking-data) (syntax->datum #'datadef:name))))
+                           (define positions (stream->list (in-range (length (datadef-part-mock-data (car (datadef-parts datadef:name)))))))
+                           (if (empty? positions)
+                             (error "No mock data defined")
+                             (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (db-mock #f positions))))
                          (define dtb-ret
                            (cond
                              [(and (db-mocking-data)

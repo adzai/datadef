@@ -119,4 +119,14 @@
     (with-mock-data ((datadef:test . (0)))
       (check-equal? (hash-keys (datadef:test->result) #t)
                     '(snakeColumn1 snakeColumn2))))
+  (test-case "#:datadef"
+    (define-datadef test
+                        '((column1 _ (val1)) (column2 _ (val2)))
+                        #:ret-type hash
+                        #:from "table")
+    (with-mock-data #:datadef
+      (check-equal? (datadef:test->result)
+                    `(,#hash([column1 . val1]
+                             [column2 . val2])))))
+
 )

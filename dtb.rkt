@@ -6,6 +6,7 @@
          racket/list
          racket/match
          scribble/srcdoc
+         "lib/test-utils.rkt"
          "lib/utils.rkt"
          (for-syntax racket/syntax
                      syntax/parse
@@ -23,57 +24,29 @@
     })
 )
 
-(define db-mocking-data (make-parameter #f))
-
 ; SPEC
 #; (with-mock-data
   '((datadef:test 0 1 2 3)
     (dtb-query-rows (("test" 1 2 3) (4 5 6 5)) 0 0 0 0))
   (check-equal?))
-
-(define (group-mock-data data-list positions)
-  (define positions-list (if (list? positions)
-                           positions
-                           (list positions)))
-  (for/list ([pos positions-list])
-    (for/list ([data data-list])
-      (list-ref data pos))))
-
- (define (parse-datadef-part dd part)
-   (define len (length part))
-   (match len
-     [0 (db-mock #f (void))]
-     [1 (db-mock #f (car part))]
-     [2 (db-mock (car part) (cadr part))]
-     [_ (error (format "Wrong number of args, part: ~a" part))] ; TODO better err msg
-))
-
-(define (parse-db-part data)
-  (cond
-    [(and (list? data) (= (length data) 1))
-     (define dat (if (list? (car (car data))) (car data) (map list (car data))))
-     (db-mock dat (void))]
-    [(and (list? data) (= (length data) 2))
-     (define dat (if (list? (car (car data))) (car data) (map list (car data))))
-      (db-mock dat (cadr data))]
-    [else (error (format "Wrong number of args, data: ~a" data))])) ; TODO better err msg
-
-
-(define (set-mock-data! mock-data-list)
-  (for ([part mock-data-list])
-    (define key (car part))
-    (define mock (if (regexp-match? #rx"datadef:" (symbol->string key))
-      (parse-datadef-part key (cdr part))
-      (parse-db-part (cdr part))))
-    (hash-set! (db-mocking-data) key mock)))
-
 (define-syntax (with-mock-data stx)
   (syntax-parse stx
-    [(_ (mock-data ...) body ...)
-     (with-syntax ([mock-data-list #'(syntax->datum #'(mock-data ...))])
+    [(_ (~or (~or (~seq (mock-data ...) (~and #:datadef datadef-kw) mock+dd)
+                  (~seq (~and #:datadef datadef-kw) (mock-data ...) dd+mock))
+             (~or (mock-data ...) (~and #:datadef datadef-kw) mock/dd))
+                   body ...)
+     (with-syntax ([mock-data-list (cond
+                                     [(or (attribute mock+dd)
+                                          (attribute dd+mock))
+                                      #'(syntax->datum #'(mock-data ...))]
+                                     [(attribute datadef-kw) #'#f]
+                                     [else
+                                     #'(syntax->datum #'(mock-data ...))])]
+                   [datadef? (if (attribute datadef-kw) #t #f)])
        #'(begin
            (parameterize ([db-mocking-data (make-hash)])
-             (set-mock-data! mock-data-list)
+             (when datadef? (hash-set! (db-mocking-data) 'datadef #t))
+             (when mock-data-list (set-mock-data! mock-data-list))
              body ...)))]))
 
 (define-for-syntax (create-identifier stx prefix name)
