@@ -80,17 +80,17 @@
                                                  [pos (cond
                                                         [(list? positions)
                                                         (car positions)]
-                                                        [(void? positions) '(0)]
+                                                        [(void? positions) 0]
                                                         [(false? positions) #f]
                                                         [else (list positions)])]
-                                                [data (car (db-mock-data mock))]
-                                                [rest-data (cdr (db-mock-data mock))])
-                                            (unless (void? positions)
-                                              (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (db-mock rest-data (if (and (list? positions)
+                                                [data (db-mock-data mock)]
+                                                )
+                                            (unless (empty? positions)
+                                              (hash-set! (db-mocking-data) (get-func-sym (cdr func-name-lst)) (db-mock data (if (and (list? positions)
                                                                                                                                            (not (empty? positions)))
                                                                                                                                     (remove pos positions)
                                                                                                                                     positions))))
-                                            (get-mock-data data pos))
+                                            (list-ref data pos))
                                           (with-connection-name #:connection user-conn
                                             (apply (car func-name-lst) (append (list (connection-param) stmt)
                                                                                args))))))])
@@ -103,7 +103,8 @@
                                                                           (map (λ (x) (cons (eval x _ns) x)) (syntax->datum #'query-funcs)))))
                        (define (disconnect-func)
                          (when (connection? (connection-param))
-                           (disconnect (connection-param))))
+                           (disconnect (connection-param))
+                           (connection-param #f)))
                        (define-syntax (with-connection-name stx)
                          (syntax-parse stx
                            ((_ (~optional (~seq #:connection user-conn) #:defaults ([user-conn #'#f])) body rest-connection)
