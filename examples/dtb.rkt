@@ -64,5 +64,5 @@
   (require rackunit)
   (test-case
     "test case"
-    (with-mock-data ((dtb-query-rows (userinfo other-info) (0)))
+    (with-mock-data ((dtb-query-rows (#(userinfo))))
       (check-equal? (example-func) '(#(userinfo))))))
