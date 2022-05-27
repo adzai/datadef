@@ -81,9 +81,9 @@
                                [column2 . val2])))
          (check-equal? (list (vector 1 2 3)) (dtb-query-rows "SELECT * FROM TEST")))
       (with-mock-data #:datadef
-                    ((dtb-query-rows ((#(1 2 3)))))
+                    ((dtb-query-rows ((#(1 2 3)) (#(3 4 5) #(6 7 8))) (1)))
          (check-equal? (datadef:test->result)
                       `(,#hash([column1 . val1]
                                [column2 . val2])))
-         (check-equal? (list (vector 1 2 3)) (dtb-query-rows "SELECT * FROM TEST"))))
+         (check-equal? (list (vector 3 4 5) (vector 6 7 8)) (dtb-query-rows "SELECT * FROM TEST"))))
 )

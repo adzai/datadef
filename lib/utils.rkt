@@ -137,7 +137,7 @@
                        (if (and (>= len 2)
                                 (not (eq? (cadr dd) '_)))
                          (cadr dd) 1st))))
-       (define 3rd (if (>= len 3) (caddr dd) #f))
+       (define 3rd (if (>= len 3) (let ([val (caddr dd)]) (if (list? val) val (list val))) #f))
        (define 4th (if (= len 4) (cadddr dd) #f))
        (datadef-part 1st 2nd 3rd 4th)]
     [(symbol? dd) (datadef-part dd (case-thunk (strip-prefix dd)) #f #f)]

@@ -6,6 +6,8 @@
          racket/list
          racket/match
          scribble/srcdoc
+         (for-doc scribble/example
+                  scribble/manual)
          "lib/test-utils.rkt"
          "lib/utils.rkt"
          (for-syntax racket/syntax
@@ -13,7 +15,53 @@
                      racket/base))
 
 (provide
-  with-mock-data
+  (form-doc
+    (with-mock-data (~or mock-data-definition #:datadef) body ...)
+    @{
+    Defines a block where all database data will be mocked.
+    First value to be provided is a list of lists defining the mock data.
+    First value of this list is the identifier that will be mocked,
+    such as a datadef or a query function generated via the dtb module.
+    The second value for datadef entries is expected to be the position
+    of mock data in the datadef definition, for dtb functions it is expected to be a
+    list of mock data.
+    The dtb functions can optionally receive a third value, which can be a list of
+    indices that will be used to retrieve data from the mock data defined in the
+    second value.
+
+    An optional argument @racket[#:datadef] can be provided, which consumes mock data
+    from the datadef definition one by one.
+
+    @examples[#:label "Example tests:"
+          (require rackunit
+                   db
+                   datadef)
+          (db-funcs-init dtb
+                          #:connection-func (λ ()))
+          (test-case
+              "Testing list of hash and empty list return type"
+              (define-datadef test
+                              '((column1 _ (val1 val2)) (column2 _ (val3 val4)))
+                              #:ret-type hash
+                              #:from "table")
+              (with-mock-data ((datadef:test ((0 1) #f))
+                               (dtb-query-rows ((#(val1 val2 val3)) ())))
+                (check-equal? (datadef:test->result)
+                              `(,#hash([column1 . val1]
+                                       [column2 . val3])
+                                ,#hash([column1 . val2]
+                                       [column2 . val4])))
+                (check-equal? (datadef:test->result)
+                              '())
+                (check-equal? (dtb-query-rows "SELECT * FROM table")
+                              '(#(val1 val2 val3)))
+                (check-equal? (dtb-query-rows "SELECT * FROM another_table")
+                              '()))
+              (with-mock-data #:datadef
+                (check-equal? (datadef:test->result)
+                              `(,#hash([column1 . val1]
+                                       [column2 . val3])))))
+          ]})
   db-mocking-data
   (form-doc
     (db-funcs-init prefix #:connection-func conn-func
@@ -21,6 +69,13 @@
     #:contracts ([prefix any/c]
                  [connection-func (-> connection-pool? connection?)])
     @{
+    Creates wrappers around @hyperlink["https://docs.racket-lang.org/db/query-api.html" "db"]
+    query functions with the provided prefix. For
+    example, if the user provides a prefix @racket[dtb], functions such as
+    @racket[query-rows] will be wrapped and called @racket[dtb-query-rows].
+    The wrapped functions provide some benefits, such as handling the database
+    connection and deciding if data should be mocked.
+
     })
 )
 

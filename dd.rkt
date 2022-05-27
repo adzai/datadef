@@ -17,7 +17,6 @@
          racket/contract
          racket/function
          racket/string
-         racket/stream
          racket/format
          "lib/test-utils.rkt"
          "lib/key-utils.rkt"
@@ -28,54 +27,62 @@
 (define datadef-db-rows-func (make-parameter #f))
 
 (provide
+  (form-doc
+      (define-datadef name dd #:from from #:ret-type ret-type
+                              [#:provide
+                               #:single-ret-val
+                               #:single-ret-val/f
+                               #:keys-strip-prefix
+                               #:camel-case
+                               #:kebab-case
+                               #:snake-case
+                               #:where where
+                               #:limit limit
+                               #:order-by order-by
+                               #:group-by group-by
+                               doc-string])
+      #:contracts ([name any/c]
+                   [dd (listof any/c)]
+                   [from string?]
+                   [ret-type (or/c list vector hash)]
+                   [where string?]
+                   [limit integer?]
+                   [order-by string?]
+                   [group-by string?]
+                   [doc-string string?])
+      @{
+        Creates a @racket[datadef] and a function @racket[datadef:name->result] to
+        get result of @racket[dtb-query-rows] formatted with @racket[datadef-format-func]
+        based on the provided @racket[#:ret-type].
+
+        If @racket[#:provide] keyword is provided, scribble documentation gets created for the constant definition @racket[datadef:name] and the
+        @racket[datadef:name->result] function. Both are exported as well.
+
+        @racket[#:single-ret-val] can be used to return only 1 value. If there are no query results,
+        it returns the empty version of the provided @racket[ret-type].
+
+
+        @racket[#:single-ret-val/f] will return @racket[#f] if there are no query results.
+
+        The last optional argument @racket[doc-string] can be used to provide additional documentation for the datadef
+        with the usual scribble syntax.
+      })
   define-conversion
-  datadef-db-rows-func
-  (struct-out datadef)
-  (struct-out datadef-part)
+  (parameter-doc
+    datadef-db-rows-func
+  (parameter/c
+    (->i ((statement string?))
+         () #:rest
+         (rest (listof any/c))
+         (result (listof vector?))))
+  db-rows-func
+  @{
+    Function used for retrieving data from the database.
+  })
 
  ; Must be re-provided for syntax stage in order to use
  ; define/provide-datadef in racket/base modules
  (for-syntax quote #%datum)
-  (form-doc
-    (define-datadef name dd #:from from #:ret-type ret-type
-                            [#:provide
-                             #:single-ret-val
-                             #:single-ret-val/f
-                             #:keys-strip-prefix
-                             #:camel-case
-                             #:kebab-case
-                             #:snake-case
-                             #:where where
-                             #:limit limit
-                             #:order-by order-by
-                             #:group-by group-by
-                             doc-string])
-    #:contracts ([name any/c]
-                 [dd (listof any/c)]
-                 [from string?]
-                 [ret-type (or/c list vector hash)]
-                 [where string?]
-                 [limit integer?]
-                 [order-by string?]
-                 [group-by string?]
-                 [doc-string string?])
-    @{
-      Creates a @racket[datadef] and a function @racket[datadef:name->result] to
-      get result of @racket[dtb-query-rows] formatted with @racket[datadef-format-func]
-      based on the provided @racket[#:ret-type].
-
-      If @racket[#:provide] keyword is provided, scribble documentation gets created for the constant definition @racket[datadef:name] and the
-      @racket[datadef:name->result] function. Both are exported as well.
-
-      @racket[#:single-ret-val] can be used to return only 1 value. If there are no query results,
-      it returns the empty version of the provided @racket[ret-type].
-
-
-      @racket[#:single-ret-val/f] will return @racket[#f] if there are no query results.
-
-      The last optional argument @racket[doc-string] can be used to provide additional documentation for the datadef
-      with the usual scribble syntax.
-    })
 )
 
 (define-syntax (define-datadef stx)
@@ -215,9 +222,10 @@
                                                       [(not (empty? qs-args))
                                                        (apply format qs qs-args)]
                                                       [else qs]))
-                         (when (and (hash-ref (db-mocking-data) 'datadef #f)
+                         (when (and (db-mocking-data)
+                                    (hash-ref (db-mocking-data) 'datadef #f)
                                     (false? (hash-has-key? (db-mocking-data) (syntax->datum #'datadef:name))))
-                           (define positions (stream->list (in-range (length (datadef-part-mock-data (car (datadef-parts datadef:name)))))))
+                           (define positions (range (length (datadef-part-mock-data (car (datadef-parts datadef:name))))))
                            (if (empty? positions)
                              (error "No mock data defined")
                              (hash-set! (db-mocking-data) (syntax->datum #'datadef:name) (db-mock #f positions))))

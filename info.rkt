@@ -6,7 +6,8 @@
                "web-server-lib"
                "base" "scribble-lib"))
 
-(define build-deps '("at-exp-lib"
+(define build-deps '("db-doc"
+                     "at-exp-lib"
                      "rackunit-lib"
                      "sandbox-lib"
                      "scribble-lib" "racket-doc"))
