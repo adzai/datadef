@@ -1,4 +1,4 @@
-# Datadef
+# datadef
 Racket library for database data retrieval and database mocking.
 
 ## Requirements
@@ -7,37 +7,13 @@ Racket library for database data retrieval and database mocking.
 
 ## Install
 
+Locally:
+
 `raco pkg install --auto --batch`
 
+From racket package index:
+
+`raco pkg install datadef`
+
 ## Examples
-
-Example usages of datadef and the dtb module are in
-the examples folder.
-
-**Generate documentation**
-
-`cd example-doc`
-
-`scribble +m doc.scrbl`
-
-`open doc.html`
-
-**Run tests**
-
-`raco test **.rkt`
-
-**Run example tests**
-
-`cd examples`
-
-`raco test dtb.rkt`
-
-**Run example server**
-
-`cd examples`
-
-`racket server.rkt`
-
-Test with curl:
-
-`curl localhost:7777/users`
+Usage examples can be seen at https://github.com/adzai/datadef-examples.
