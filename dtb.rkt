@@ -45,7 +45,7 @@
                               #:ret-type hash
                               #:from "table")
               (with-mock-data ((datadef:test ((0 1) #f))
-                               (dtb-query-rows ((#(val1 val2 val3)) ())))
+                               (dtb-query-rows ((#(val1 val2 val3)) ()) (0 1)))
                 (check-equal? (datadef:test->result)
                               `(,#hash([column1 . val1]
                                        [column2 . val3])
