@@ -71,10 +71,11 @@
   (parameter-doc
     datadef-db-rows-func
   (parameter/c
-    (->i ((statement string?))
-         () #:rest
-         (rest (listof any/c))
-         (result (listof vector?))))
+    (or/c false?
+      (->i ((statement string?))
+           () #:rest
+           (rest (listof any/c))
+           (result (listof vector?)))))
   db-rows-func
   @{
     Function used for retrieving data from the database.
