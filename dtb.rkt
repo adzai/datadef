@@ -86,13 +86,11 @@
   (check-equal?))
 (define-syntax (with-mock-data stx)
   (syntax-parse stx
-    [(_ (~or (~or (~seq (mock-data ...) (~and #:datadef datadef-kw) mock+dd)
-                  (~seq (~and #:datadef datadef-kw) (mock-data ...) dd+mock))
+    [(_ (~or (~seq (mock-data ...) (~and #:datadef datadef-kw) mock+dd)
              (~or (mock-data ...) (~and #:datadef datadef-kw) mock/dd))
                    body ...)
      (with-syntax ([mock-data-list (cond
-                                     [(or (attribute mock+dd)
-                                          (attribute dd+mock))
+                                     [(attribute mock+dd)
                                       #'(syntax->datum #'(mock-data ...))]
                                      [(attribute datadef-kw) #'#f]
                                      [else
