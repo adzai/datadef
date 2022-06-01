@@ -263,7 +263,7 @@
                                 (datadef-db-rows-func)
                                 final-query-string
                                 query-args)]
-                             [else (error "mock data nor datadef-db-rows-func not set")]))
+                             [else (error "mock data nor datadef-db-rows-func set")]))
                          (define ret ((curry get-formatted-result datadef-part-list (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
