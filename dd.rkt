@@ -84,6 +84,16 @@
  ; Must be re-provided for syntax stage in order to use
  ; define/provide-datadef in racket/base modules
  (for-syntax quote #%datum)
+ (parameter-doc
+   datadef:ensure-json-func
+   (parameter/c procedure?)
+   datadef:ensure-json-func
+   @{
+
+   Parameter holding the function that will be used when
+   @racket[#:json #t] is specified in the datadef result function.
+
+   })
 )
 
 (define-syntax (define-datadef stx)
@@ -279,6 +289,7 @@
 
 (module+ test
   (require rackunit
+           (only-in "lib/json-utils.rkt" ensure-json-value)
            "dtb.rkt")
   (test-case
     "Basic datadef"
@@ -426,4 +437,15 @@
         (check-equal? (datadef:test->result)
                       `(,#hash([column1 . val1]
                                [column2 . val2])))))
+    (test-case "ensure json parameter"
+      (define-datadef test
+                      '((column1 _ val1))
+                      #:ret-type hash
+                      #:from "table"
+                      #:single-ret-val/f)
+      (check-equal? (datadef:ensure-json-func) ensure-json-value) ; Default function
+      (parameterize ([datadef:ensure-json-func (λ (val) "Custom func")])
+        (with-mock-data #:datadef
+                        (check-equal? (datadef:test->result #:json #t)
+                                      #hash([column1 . "Custom func"])))))
 )

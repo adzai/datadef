@@ -116,11 +116,23 @@
                  (or/c false? integer?)) any)
       (datadef-part-list position)
       @{})
+  (parameter-doc
+    datadef:ensure-json-func
+    (parameter/c procedure?)
+    datadef:ensure-json-func
+    @{
+
+    Parameter holding the function that will be used when
+    @racket[#:json #t] is specified in the datadef result function.
+
+    })
 )
 
 (struct datadef (parts query-string format-func) #:transparent)
 (struct datadef-part (col key mock-data type) #:transparent)
 (struct db-mock (data positions) #:transparent)
+
+(define datadef:ensure-json-func (make-parameter ensure-json-value))
 
 (define (parse-datadef-parts list-of-dd case-thunk keys-strip-prefix?)
   (define strip-prefix (if keys-strip-prefix?
@@ -191,7 +203,7 @@
 (define (ensure-type/json type? json? val)
   (cond
     [type? ((hash-ref conversions type?) val)]
-    [json? (ensure-json-value val)]
+    [json? ((datadef:ensure-json-func) val)]
     [else val]))
 
 (define (get-iter-func ret-type)
