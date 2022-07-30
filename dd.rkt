@@ -24,7 +24,7 @@
          racket/bool
          "lib/utils.rkt")
 
-(define datadef-db-rows-func (make-parameter #f))
+(define datadef:db-rows-func (make-parameter #f))
 
 (provide
   (form-doc
@@ -69,7 +69,7 @@
       })
   define-conversion
   (parameter-doc
-    datadef-db-rows-func
+    datadef:db-rows-func
   (parameter/c
     (or/c false?
       (->i ((statement string?))
@@ -259,12 +259,12 @@
                                                                                                                           positions))))
                                   (get-mock-data (datadef-parts datadef:name) pos)))
                               ]
-                             [(datadef-db-rows-func)
+                             [(datadef:db-rows-func)
                               (apply
-                                (datadef-db-rows-func)
+                                (datadef:db-rows-func)
                                 final-query-string
                                 query-args)]
-                             [else (error "mock data nor datadef-db-rows-func set")]))
+                             [else (error "mock data nor datadef:db-rows-func set")]))
                          (define ret ((curry get-formatted-result datadef-part-list (get-iter-func ret-datum)
                                                                      #:single-ret-val single-ret-val?
                                                                      #:single-ret-val/f single-ret-val/f?
