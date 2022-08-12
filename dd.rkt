@@ -27,6 +27,12 @@
 (define datadef:db-rows-func (make-parameter #f))
 
 (provide
+  build-select-query
+  (struct-out sql-select)
+  (struct-out datadef)
+  (struct-out datadef-part)
+  (struct-out db-mock)
+  format-query-string
   (form-doc
       (define-datadef name dd #:from from #:ret-type ret-type
                               [#:provide
@@ -139,7 +145,8 @@
                     [result-func-contract #'(->i () (#:where [query-where (or/c false? string?)]
                                                                   #:order-by [query-order-by (or/c false? string?)]
                                                                   #:group-by [query-group-by (or/c false? string?)]
-                                                                  #:limit [query-limit (or/c false? string?)]
+                                                                  #:limit [query-limit (or/c false? integer?)]
+                                                                  #:query-string [new-query-string (or/c false? string?)]
                                                                   #:query-string-args [qs-args (listof any/c)]
                                                                   #:mutable [mutable boolean?]
                                                                   #:json [json? boolean?]) #:rest [query-args (listof any/c)]
@@ -201,6 +208,7 @@
                                   [query-order-by #f]
                                   [query-group-by #f]
                                   [query-limit #f]
+                                  [new-query-string #f]
                                   [qs-args empty]
                                   [mutable #f]
                                   [json #f])
@@ -211,10 +219,13 @@
                                   @racket[query-string-args] " accepts a list of argument for missing parameters from the query-string
                                   itself that are represented with the placeholder ~a."})))
                                   #'(void))
-                       (define/contract (result-func-name #:where [query-where #f]
+                       ; TODO remove keywords and just keep query-string?
+                       (define/contract (result-func-name
+                                                 #:where [query-where #f]
                                                  #:order-by [query-order-by #f]
                                                  #:group-by [query-group-by #f]
                                                  #:limit [query-limit #f]
+                                                 #:query-string [new-query-string #f]
                                                  #:query-string-args [qs-args '()]
                                                  #:mutable [mutable #f]
                                                  #:json [json? #f]
@@ -222,6 +233,7 @@
                                                  . query-args)
                           result-func-contract
                          (define qs (cond
+                                      [new-query-string new-query-string]
                                       [(or query-where query-order-by query-group-by query-limit)
                                        (define select (datadef-sql-select datadef:name))
                                        (define new-where (or query-where (sql-select-where select)))
@@ -461,4 +473,15 @@
         (with-mock-data #:datadef
                         (check-equal? (datadef:test->result #:json #t)
                                       #hash([column1 . "Custom func"])))))
+    (test-case "sql select struct"
+      (define-datadef test
+                      '((column1 _ val1))
+                      #:ret-type hash
+                      #:from "table"
+                      #:single-ret-val/f)
+      (define select (datadef-sql-select datadef:test))
+      (check-equal? (build-select-query #:columns "COUNT(*)"
+                                     #:from (sql-select-from select))
+                    "SELECT COUNT(*) FROM table")
+      )
 )

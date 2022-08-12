@@ -23,7 +23,8 @@
        [result-func (->i () (#:where [query-where (or/c false? string?)]
                              #:order-by [query-order-by (or/c false? string?)]
                              #:group-by [query-group-by (or/c false? string?)]
-                             #:limit [query-limit (or/c false? string?)]
+                             #:limit [query-limit (or/c false? integer?)]
+                             #:query-string [new-query-string (or/c false? string?)]
                              #:query-string-args [qs-args (listof any/c)]
                              #:mutable [mutable boolean?]
                              #:json [json? boolean?]) #:rest [query-args (listof any/c)]
@@ -138,6 +139,7 @@
 (struct datadef (parts query-string result-func sql-select) #:transparent)
 (struct datadef-part (col key mock-data type) #:transparent)
 (struct db-mock (data positions) #:transparent)
+(struct sql-select (columns from where order-by group-by limit) #:transparent)
 
 (define datadef:ensure-json-func (make-parameter ensure-json-value))
 
@@ -260,8 +262,6 @@
           (if (list? mock-data)
             (list-ref mock-data p)
             mock-data)))]))
-
-(struct sql-select (columns from where order-by group-by limit) #:transparent)
 
 (define (make-sql-select #:columns [columns #f]
                          #:from [from #f]
