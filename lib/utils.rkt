@@ -20,10 +20,14 @@
       datadef
       ([parts (listof datadef-part?)]
        [query-string string?]
-       [format-func (->* [(or/c (listof any/c)
-                                      vector?)
-                          boolean?]
-                          (or/c list? vector? hash?))]
+       [result-func (->i () (#:where [query-where (or/c false? string?)]
+                             #:order-by [query-order-by (or/c false? string?)]
+                             #:group-by [query-group-by (or/c false? string?)]
+                             #:limit [query-limit (or/c false? string?)]
+                             #:query-string-args [qs-args (listof any/c)]
+                             #:mutable [mutable boolean?]
+                             #:json [json? boolean?]) #:rest [query-args (listof any/c)]
+                         [result (or/c list? vector? hash? false?)])]
        [sql-select sql-select?])
      #:transparent
      @{
@@ -131,7 +135,7 @@
     })
 )
 
-(struct datadef (parts query-string format-func sql-select) #:transparent)
+(struct datadef (parts query-string result-func sql-select) #:transparent)
 (struct datadef-part (col key mock-data type) #:transparent)
 (struct db-mock (data positions) #:transparent)
 
