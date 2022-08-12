@@ -14,6 +14,8 @@
          racket/format)
 
 (provide
+  (struct-out sql-select)
+  make-sql-select
   (struct*-doc
       datadef
       ([parts (listof datadef-part?)]
@@ -21,7 +23,8 @@
        [format-func (->* [(or/c (listof any/c)
                                       vector?)
                           boolean?]
-                          (or/c list? vector? hash?))])
+                          (or/c list? vector? hash?))]
+       [sql-select sql-select?])
      #:transparent
      @{
 
@@ -128,7 +131,7 @@
     })
 )
 
-(struct datadef (parts query-string format-func) #:transparent)
+(struct datadef (parts query-string format-func sql-select) #:transparent)
 (struct datadef-part (col key mock-data type) #:transparent)
 (struct db-mock (data positions) #:transparent)
 
@@ -253,6 +256,16 @@
           (if (list? mock-data)
             (list-ref mock-data p)
             mock-data)))]))
+
+(struct sql-select (columns from where order-by group-by limit) #:transparent)
+
+(define (make-sql-select #:columns [columns #f]
+                         #:from [from #f]
+                         #:where [where #f]
+                         #:order-by [order-by #f]
+                         #:group-by [group-by #f]
+                         #:limit [limit #f])
+  (sql-select columns from where order-by group-by limit))
 
 (define (build-select-query [str ""]
                             #:columns [columns #f]

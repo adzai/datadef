@@ -125,13 +125,14 @@
                     [single-ret-val? (if (attribute single-kw) #t #f)]
                     [single-ret-val/f? (if (attribute single/f-kw) #t #f)]
                     [case-thunk #`(cond
-                                                       [#,(not (false? (attribute kebab-case?))) any->kebab-case]
-                                                       [#,(not (false? (attribute camel-case?))) any->camel-case]
-                                                       [#,(not (false? (attribute snake-case?))) any->snake-case]
-                                                       [else (λ (key) key)])]
+                                    [#,(not (false? (attribute kebab-case?))) any->kebab-case]
+                                    [#,(not (false? (attribute camel-case?))) any->camel-case]
+                                    [#,(not (false? (attribute snake-case?))) any->snake-case]
+                                    [else (λ (key) key)])]
                     [keys-strip-prefix? (if (attribute keys-strip-prefix-kw) #t #f)]
                     [datadef-part-list #'(parse-datadef-parts dd case-thunk keys-strip-prefix?)]
                     [datadef-doc #'(map (λ (dp) (datadef-part-key dp)) datadef-part-list)]
+                    [datadef-columns #'(map (λ (dp) (datadef-part-col dp)) datadef-part-list)]
                     [format-func-ret-type (if (or (attribute single-kw)
                                                   (attribute single/f-kw))
                                             (if (attribute single/f-kw) #'(or/c false? ret-type-predicate) #'ret-type-predicate)
@@ -141,9 +142,17 @@
                                                                   #:group-by [query-group-by (or/c false? string?)]
                                                                   #:limit [query-limit (or/c false? string?)]
                                                                   #:query-string-args [qs-args (listof any/c)]
+                                                                  #:total-count [total-count boolean?]
+                                                                  #:oldest [oldest boolean?]
                                                                   #:mutable [mutable boolean?]
                                                                   #:json [json? boolean?]) #:rest [query-args (listof any/c)]
-                                                                  [result format-func-ret-type])]
+                                                                  [result (or/c format-func-ret-type integer?)])]
+                    [select-struct #'(make-sql-select #:columns datadef-columns
+                                                      #:from from
+                                                      #:where where
+                                                      #:order-by order-by
+                                                      #:group-by group-by
+                                                      #:limit limit)]
                     [result-func-name (datum->syntax stx (string->symbol (format "datadef:~a->result" (syntax->datum #'name))))]
                     [query-string #'(build-select-query #:columns dd
                                                         #:from from
@@ -196,6 +205,8 @@
                                   [query-group-by #f]
                                   [query-limit #f]
                                   [qs-args empty]
+                                  [total-count #f]
+                                  [oldest #f]
                                   [mutable #f]
                                   [json #f])
                                  (#,@#'{
@@ -207,26 +218,51 @@
                                   #'(void))
                        (define datadef:name
                          (datadef datadef-part-list query-string (curry get-formatted-result datadef-part-list (get-iter-func ret-datum)
-                                                                     #:single-ret-val single-ret-val?
-                                                                     #:single-ret-val/f single-ret-val/f?
-                                                                     #:ret-type ret-datum)))
+                                                                        #:single-ret-val single-ret-val?
+                                                                        #:single-ret-val/f single-ret-val/f?
+                                                                        #:ret-type ret-datum)
+                                  select-struct))
                        (define/contract (result-func-name #:where [query-where #f]
                                                  #:order-by [query-order-by #f]
                                                  #:group-by [query-group-by #f]
                                                  #:limit [query-limit #f]
                                                  #:query-string-args [qs-args '()]
+                                                 #:total-count [total-count? #f]
+                                                 #:oldest [oldest #f]
                                                  #:mutable [mutable #f]
                                                  #:json [json? #f]
                                                  #:custom-iter-func [custom-iter-func #f]
                                                  . query-args)
                           result-func-contract
-                         (define qs (if (or query-where query-order-by query-group-by query-limit)
-                                      (build-select-query query-string
-                                                          #:where query-where
-                                                          #:order-by query-order-by
-                                                          #:group-by query-group-by
-                                                          #:limit query-limit)
-                                      query-string))
+                         (define qs (cond
+                                      [oldest
+                                        (define select (datadef-sql-select datadef:name))
+                                        (define orig-order (sql-select-order-by select))
+                                        (define order
+                                          (if (regexp-match #rx"(?i:desc)" orig-order)
+                                            (regexp-replace #rx"(?i:desc)" orig-order "")
+                                            (format "~a DESC" orig-order)))
+                                        (build-select-query #:columns (sql-select-columns select)
+                                                            #:from (sql-select-from select)
+                                                            #:order-by order
+                                                            #:group-by (sql-select-group-by select)
+                                                            #:limit 1)]
+                                      [total-count?
+                                        (build-select-query (if total-count? (string-append "SELECT COUNT(*) FROM " from)
+                                                              (datadef-query-string datadef:name)))]
+                                      [(or query-where query-order-by query-group-by query-limit)
+                                       (define select (datadef-sql-select datadef:name))
+                                       (define new-where (or query-where (sql-select-where select)))
+                                       (define new-order-by (or query-order-by (sql-select-order-by select)))
+                                       (define new-group-by (or query-group-by (sql-select-group-by select)))
+                                       (define new-limit (or query-limit (sql-select-limit select)))
+                                       (build-select-query #:columns datadef-columns
+                                                           #:from from
+                                                           #:where new-where
+                                                           #:order-by new-order-by
+                                                           #:group-by new-group-by
+                                                           #:limit new-limit)]
+                                      [else (datadef-query-string datadef:name)]))
                          (define final-query-string (cond
                                                       [(string? qs-args)
                                                        (format qs qs-args)]
@@ -275,10 +311,12 @@
                                 final-query-string
                                 query-args)]
                              [else (error "mock data nor datadef:db-rows-func set")]))
-                         (define ret ((curry get-formatted-result datadef-part-list (get-iter-func ret-datum)
-                                                                     #:single-ret-val single-ret-val?
-                                                                     #:single-ret-val/f single-ret-val/f?
-                                                                     #:ret-type ret-datum) dtb-ret json? #:custom-iter-func custom-iter-func))
+                         (define ret (if total-count?
+                                       (vector-ref (car dtb-ret) 0)
+                                       ((curry get-formatted-result datadef-part-list (get-iter-func ret-datum)
+                                               #:single-ret-val single-ret-val?
+                                               #:single-ret-val/f single-ret-val/f?
+                                               #:ret-type ret-datum) dtb-ret json? #:custom-iter-func custom-iter-func)))
                          (if mutable
                            (if (list? ret)
                              (if (and (not (empty? ret))
@@ -290,6 +328,7 @@
 (module+ test
   (require rackunit
            (only-in "lib/json-utils.rkt" ensure-json-value)
+           db
            "dtb.rkt")
   (test-case
     "Basic datadef"
@@ -448,4 +487,15 @@
         (with-mock-data #:datadef
                         (check-equal? (datadef:test->result #:json #t)
                                       #hash([column1 . "Custom func"])))))
+    (db-funcs-init dtb
+                   #:connection-func (λ () (void)))
+    (test-case "total count"
+      (define-datadef test
+                      '((column1 _ val1))
+                      #:ret-type hash
+                      #:from "table"
+                      #:single-ret-val/f)
+      (parameterize ([datadef:db-rows-func dtb-query-rows])
+        (with-mock-data ((dtb-query-rows ((#(100)))))
+                        (check-equal? (datadef:test->result #:total-count #t) 100))))
 )
