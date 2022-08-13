@@ -263,7 +263,7 @@
                          (define dtb-ret
                            (cond
                              [(and (db-mocking-data)
-                                   (hash-has-key? (db-mocking-data) (syntax->datum #'datadef:name)))
+                                   (not (empty? (db-mock-positions (hash-ref (db-mocking-data) (syntax->datum #'datadef:name) '())))))
                               (define mock (hash-ref (db-mocking-data) (syntax->datum #'datadef:name)))
                               (define positions (db-mock-positions mock))
                               (define pos (cond

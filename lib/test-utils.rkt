@@ -27,8 +27,7 @@
 (define (parse-db-part data)
   (cond
     [(and (list? data) (= (length data) 1))
-     (define dat (if (list? (car (car data))) (car data) (map list (car data))))
-     (db-mock dat (void))]
+     (db-mock (car data) (void))]
     [(and (list? data) (= (length data) 2))
      (define dat (if (list? (car (car data))) (car data) (map list (car data))))
       (db-mock dat (cadr data))]
