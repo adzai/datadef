@@ -24,8 +24,6 @@
                              #:order-by [query-order-by (or/c false? string?)]
                              #:group-by [query-group-by (or/c false? string?)]
                              #:limit [query-limit (or/c false? integer?)]
-                             #:query-string [new-query-string (or/c false? string?)]
-                             #:query-string-args [qs-args (listof any/c)]
                              #:mutable [mutable boolean?]
                              #:json [json? boolean?]) #:rest [query-args (listof any/c)]
                          [result (or/c list? vector? hash? false?)])]

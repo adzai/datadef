@@ -146,8 +146,6 @@
                                                                   #:order-by [query-order-by (or/c false? string?)]
                                                                   #:group-by [query-group-by (or/c false? string?)]
                                                                   #:limit [query-limit (or/c false? integer?)]
-                                                                  #:query-string [new-query-string (or/c false? string?)]
-                                                                  #:query-string-args [qs-args (listof any/c)]
                                                                   #:mutable [mutable boolean?]
                                                                   #:json [json? boolean?]) #:rest [query-args (listof any/c)]
                                                                   [result format-func-ret-type])]
@@ -182,10 +180,6 @@
                                                                                      (paragraph (style "RktMeta" null)
                                                                                                 elem))
                                                                                         (format-query-string query-string))]
-                                  (let ([arg-len (length (regexp-match* #px"~a" query-string))])
-                                    (if (> arg-len 0)
-                                      (~a "Query string requires " arg-len " query-string-args arguments")
-                                      ""))
                                   "Type: "
                                   @racket[format-func-ret-type]
                                   @paragraph[
@@ -208,8 +202,6 @@
                                   [query-order-by #f]
                                   [query-group-by #f]
                                   [query-limit #f]
-                                  [new-query-string #f]
-                                  [qs-args empty]
                                   [mutable #f]
                                   [json #f])
                                  (#,@#'{
@@ -221,38 +213,22 @@
                                   #'(void))
                        ; TODO remove keywords and just keep query-string?
                        (define/contract (result-func-name
-                                                 #:where [query-where #f]
-                                                 #:order-by [query-order-by #f]
-                                                 #:group-by [query-group-by #f]
-                                                 #:limit [query-limit #f]
-                                                 #:query-string [new-query-string #f]
-                                                 #:query-string-args [qs-args '()]
+                                                 #:where [query-where (sql-select-where (datadef-sql-select datadef:name))]
+                                                 #:order-by [query-order-by (sql-select-order-by (datadef-sql-select datadef:name))]
+                                                 #:group-by [query-group-by (sql-select-group-by (datadef-sql-select datadef:name))]
+                                                 #:limit [query-limit (sql-select-limit (datadef-sql-select datadef:name))]
                                                  #:mutable [mutable #f]
                                                  #:json [json? #f]
                                                  #:custom-iter-func [custom-iter-func #f]
                                                  . query-args)
                           result-func-contract
-                         (define qs (cond
-                                      [new-query-string new-query-string]
-                                      [(or query-where query-order-by query-group-by query-limit)
-                                       (define select (datadef-sql-select datadef:name))
-                                       (define new-where (or query-where (sql-select-where select)))
-                                       (define new-order-by (or query-order-by (sql-select-order-by select)))
-                                       (define new-group-by (or query-group-by (sql-select-group-by select)))
-                                       (define new-limit (or query-limit (sql-select-limit select)))
-                                       (build-select-query #:columns dd
-                                                           #:from from
-                                                           #:where new-where
-                                                           #:order-by new-order-by
-                                                           #:group-by new-group-by
-                                                           #:limit new-limit)]
-                                      [else (datadef-query-string datadef:name)]))
-                         (define final-query-string (cond
-                                                      [(string? qs-args)
-                                                       (format qs qs-args)]
-                                                      [(not (empty? qs-args))
-                                                       (apply format qs qs-args)]
-                                                      [else qs]))
+                         (define final-query-string
+                           (build-select-query #:columns dd
+                                               #:from from
+                                               #:where query-where
+                                               #:order-by query-order-by
+                                               #:group-by query-group-by
+                                               #:limit query-limit))
                          (when (and (db-mocking-data)
                                     (hash-ref (db-mocking-data) 'datadef #f)
                                     (false? (hash-has-key? (db-mocking-data) (syntax->datum #'datadef:name))))
