@@ -132,21 +132,24 @@
                                                  [positions (db-mock-positions mock)]
                                                  [pos (cond
                                                         [(list? positions)
-                                                        (car positions)]
+                                                         (car positions)]
                                                         [(void? positions) 0]
                                                         [(false? positions) #f]
                                                         [else (list positions)])]
-                                                [data (db-mock-data mock)]
-                                                )
+                                                 [data (db-mock-data mock)])
                                             (unless (empty? positions)
-                                              (hash-set! (db-mocking-data) (get-func-sym (cdr func-name-lst)) (db-mock data (if (and (list? positions)
-                                                                                                                                           (not (empty? positions)))
-                                                                                                                                    (remove pos positions)
-                                                                                                                                    positions))))
-                                            (list-ref data pos))
+                                              (hash-set! (db-mocking-data)
+                                                         (get-func-sym (cdr func-name-lst))
+                                                         (db-mock data (if (and (list? positions)
+                                                                                (not (empty? positions)))
+                                                                         (remove pos positions)
+                                                                         positions))))
+                                            (for/list ([d (list-ref data pos)])
+                                              (for/vector ([v d])
+                                                (with-handlers ([exn:fail? (λ (e) v)])(eval v _ns)))))
                                           (with-connection-name #:connection user-conn
-                                            (apply (car func-name-lst) (append (list (connection-param) stmt)
-                                                                               args))))))])
+                                                                (apply (car func-name-lst) (append (list (connection-param) stmt)
+                                                                                                   args))))))])
                    #'(begin
                        (define-namespace-anchor _a)
                        (define _ns (namespace-anchor->namespace _a))
@@ -162,8 +165,9 @@
                          (syntax-parse stx
                            ((_ (~optional (~seq #:connection user-conn) #:defaults ([user-conn #'#f])) body rest-connection)
                             (syntax/loc stx
-                                        (let* ([owned (and (false? user-conn) (false? (connection-param)))]
+                                        (let* ([owned (and (false? user-conn) (false? (connection-param)) (not (db-mocking-data)))]
                                                [the-conn (cond
+                                                           [(db-mocking-data) #f]
                                                            [user-conn user-conn]
                                                            [owned
                                                              (conn-func (connection-pool-param))]
