@@ -38,7 +38,7 @@
   (struct*-doc
       datadef-part
       ([col (or/c symbol? string?)]
-       [key symbol?]
+       [key (or/c symbol? (list/c symbol? string?))]
        [mock-data (or/c false? list?)]
        [type (or/c symbol? false?)])
      #:transparent
@@ -46,7 +46,7 @@
   (struct-out db-mock)
   (proc-doc/names
     parse-datadef-parts
-    (-> list? (-> symbol? symbol?) boolean? (listof datadef-part?))
+    (-> list? (-> (or/c symbol? (list/c symbol? string?)) (or/c symbol? (list/c symbol? string?))) boolean? (listof datadef-part?))
   (list-of-dd case-thunk keys-strip-prefix?)
   @{})
   (form-doc
@@ -132,6 +132,7 @@
     @racket[#:json #t] is specified in the datadef result function.
 
     })
+  get-datadef-part-key
 )
 
 (struct datadef (parts query-string result-func sql-select) #:transparent)
@@ -141,21 +142,35 @@
 
 (define datadef:ensure-json-func (make-parameter ensure-json-value))
 
+(define (get-datadef-part-key key #:doc [doc #f])
+  (if (or doc (false? (list? key)))
+    key
+    (car key)))
+
 (define (parse-datadef-parts list-of-dd case-thunk keys-strip-prefix?)
   (define strip-prefix (if keys-strip-prefix?
-                          (λ (key) (string->symbol
-                                      (string-join (cdr (string-split (~a key) ".")) ".")))
+                          (λ (key)
+                             (define split (string-split (~a key) "."))
+                             (displayln split)
+                             (string->symbol
+                               (string-join (if (= (length split) 1) (list (car split)) (cdr split)) ".")))
                           (λ (key) key)))
+  (define (process-key key 1st len)
+      (define x (if (and (>= len 2)
+               (not (eq? key '_)))
+        key 1st))
+    (strip-prefix x)
+      )
   (for/list ([dd list-of-dd])
     (cond
       [(and (list? dd) (not (empty? dd)))
        (define len (length dd))
        (define 1st (car dd))
-       (define 2nd (case-thunk
-                     (strip-prefix
-                       (if (and (>= len 2)
-                                (not (eq? (cadr dd) '_)))
-                         (cadr dd) 1st))))
+       (define 2nd-part (cadr dd))
+       (define 2nd
+           (if (list? 2nd-part)
+                 (cons (case-thunk (process-key (car 2nd-part) 1st len)) (cdr 2nd-part))
+                 (case-thunk (process-key 2nd-part 1st len))))
        (define 3rd (if (>= len 3) (let ([val (caddr dd)]) (if (list? val) val (list val))) #f))
        (define 4th (if (= len 4) (cadddr dd) #f))
        (datadef-part 1st 2nd 3rd 4th)]
@@ -229,7 +244,7 @@
      (λ (dp-list row json?)
         (for/hash ([val row]
                    [dp dp-list])
-          (values (datadef-part-key dp)
+          (values (get-datadef-part-key (datadef-part-key dp))
                   (ensure-type/json (datadef-part-type dp) json? val))))]))
 
 (define (get-formatted-result datadef-part-list iter-func rows json?

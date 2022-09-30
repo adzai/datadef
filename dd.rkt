@@ -137,7 +137,7 @@
                                     [else (λ (key) key)])]
                     [keys-strip-prefix? (if (attribute keys-strip-prefix-kw) #t #f)]
                     [datadef-part-list #'(parse-datadef-parts dd case-thunk keys-strip-prefix?)]
-                    [datadef-doc #'(map (λ (dp) (datadef-part-key dp)) datadef-part-list)]
+                    [datadef-doc #'(map (λ (dp) (get-datadef-part-key (datadef-part-key dp) #:doc #t)) datadef-part-list)]
                     [format-func-ret-type (if (or (attribute single-kw)
                                                   (attribute single/f-kw))
                                             (if (attribute single/f-kw) #'(or/c false? ret-type-predicate) #'ret-type-predicate)
@@ -191,10 +191,8 @@
                                                     (eq? ret-datum list))
                                               (map item (for/list ([str-key (map ~a datadef-doc)]
                                                                    [num (length datadef-doc)])
-
-                                                          (format "~a: ~a" num str-key)
-                                                          ))
-                                              (map item (map symbol->string datadef-doc)))]}))
+                                                          (format "~a: ~a" num str-key)))
+                                              (map item (map (λ (key) (if (list? key) (~a (car key) " -- " (cadr key)) (~a key))) datadef-doc)))]}))
                                (proc-doc
                                  result-func-name
                                  result-func-contract
@@ -296,7 +294,7 @@
   (test-case
     "Basic datadef"
   (define-datadef test
-  '(column1 column2)
+  '(column1 (column2 (column2 "Explanation of key")))
     #:ret-type hash
     #:from "table")
   (check-pred datadef? datadef:test)
@@ -317,7 +315,7 @@
   (test-case
       "list of hash and empty list return type"
       (define-datadef test
-                      '((column1 _ (val1 val2)) (column2 _ (val3 val4)))
+                      '((column1 (_ "Explanation of key") (val1 val2)) (column2 _ (val3 val4)))
                       #:ret-type hash
                       #:from "table")
       (with-mock-data ((datadef:test ((0 1) #f)))
@@ -333,7 +331,7 @@
     (test-case
       "hash and empty hash return type"
       (define-datadef test
-                      '((column1 _ (val1)) (column2 _ (val2)))
+                      '(("SQL statement" column1 (val1)) (column2 _ (val2)))
                       #:ret-type hash
                       #:from "table"
                       #:single-ret-val)
