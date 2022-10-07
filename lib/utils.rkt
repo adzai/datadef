@@ -151,7 +151,6 @@
   (define strip-prefix (if keys-strip-prefix?
                           (λ (key)
                              (define split (string-split (~a key) "."))
-                             (displayln split)
                              (string->symbol
                                (string-join (if (= (length split) 1) (list (car split)) (cdr split)) ".")))
                           (λ (key) key)))
