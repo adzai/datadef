@@ -46,8 +46,8 @@
   (struct-out db-mock)
   (proc-doc/names
     parse-datadef-parts
-    (-> list? (-> (or/c symbol? (list/c symbol? string?)) (or/c symbol? (list/c symbol? string?))) boolean? (listof datadef-part?))
-  (list-of-dd case-thunk keys-strip-prefix?)
+    (-> list? (-> (or/c symbol? (list/c symbol? string?)) (or/c symbol? (list/c symbol? string?))) boolean? boolean? (listof datadef-part?))
+  (list-of-dd case-thunk keys-strip-prefix? keep-dot-prefix?)
   @{})
   (form-doc
     (define-conversion predicate procedure)
@@ -147,19 +147,20 @@
     key
     (car key)))
 
-(define (parse-datadef-parts list-of-dd case-thunk keys-strip-prefix?)
+(define (parse-datadef-parts list-of-dd case-thunk keys-strip-prefix? keep-dot-prefix?)
   (define strip-prefix (if keys-strip-prefix?
-                          (λ (key)
-                             (define split (string-split (~a key) "."))
-                             (string->symbol
-                               (string-join (if (= (length split) 1) (list (car split)) (cdr split)) ".")))
-                          (λ (key) key)))
-  (define (process-key key 1st len)
-      (define x (if (and (>= len 2)
-               (not (eq? key '_)))
-        key 1st))
-    (strip-prefix x)
-      )
+                         (λ (key)
+                            (define split (string-split (~a key) "."))
+                            (string->symbol (string-join (if (= (length split) 1) (list (car split)) (cdr split)) ".")))
+                         (λ (key) key)))
+  (define (process-key key 1st len keep-dot-prefix?)
+    (define x (if (and (>= len 2)
+                       (not (eq? key '_)))
+                key 1st))
+    (define after-strip-key (strip-prefix x))
+    (if keep-dot-prefix?
+      after-strip-key
+      (string->symbol (string-replace (symbol->string after-strip-key) "." "_"))))
   (for/list ([dd list-of-dd])
     (cond
       [(and (list? dd) (not (empty? dd)))
@@ -168,12 +169,19 @@
        (define 2nd-part (cadr dd))
        (define 2nd
            (if (list? 2nd-part)
-                 (cons (case-thunk (process-key (car 2nd-part) 1st len)) (cdr 2nd-part))
-                 (case-thunk (process-key 2nd-part 1st len))))
+                 (cons (case-thunk (process-key (car 2nd-part) 1st len keep-dot-prefix?)) (cdr 2nd-part))
+                 (case-thunk (process-key 2nd-part 1st len keep-dot-prefix?))))
        (define 3rd (if (>= len 3) (let ([val (caddr dd)]) (if (list? val) val (list val))) #f))
        (define 4th (if (= len 4) (cadddr dd) #f))
        (datadef-part 1st 2nd 3rd 4th)]
-    [(symbol? dd) (datadef-part dd (case-thunk (strip-prefix dd)) #f #f)]
+    [(symbol? dd)
+     (datadef-part dd
+                   (case-thunk
+                     (let ([after-strip-key (strip-prefix dd)])
+                       (if keep-dot-prefix?
+                         after-strip-key
+                         (string->symbol (string-replace (symbol->string after-strip-key) "." "_")))))
+                   #f #f)]
     [else (error (format "Expected list of a symbol, got ~v" dd))])))
 
 (define/contract (register-conversion! pred proc)

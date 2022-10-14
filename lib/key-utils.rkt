@@ -2,7 +2,8 @@
 
 (provide any->camel-case
          any->kebab-case
-         any->snake-case)
+         any->snake-case
+         prefix-dot->underscore)
 
 (define (any->camel-case* char-lst)
   (if (empty? char-lst)
@@ -58,6 +59,9 @@
 
 (define (any->snake/kebab-case key to-replace replacement)
   (string->symbol (list->string (any->snake/kebab-case* (string->list key) to-replace replacement))))
+
+(define (prefix-dot->underscore key)
+  (string->symbol (string-replace (symbol->string key) "." "_" #:all? #f)))
 
 (module+ test
   (require rackunit)
@@ -127,5 +131,14 @@
                   'some-case-word)
     (check-equal? (any->kebab-case 'some.caseWord-test)
                   'some-case-word-test)
+    )
+  (test-case
+    "Prefix dot to underscore"
+    (check-equal? (prefix-dot->underscore 'prefix.name)
+                  'prefix_name)
+    (check-equal? (prefix-dot->underscore 'prefix.name.othername)
+                  'prefix_name.othername)
+    (check-equal? (prefix-dot->underscore 'name)
+                  'name)
     )
 )

@@ -42,6 +42,7 @@
                                #:camel-case
                                #:kebab-case
                                #:snake-case
+                               #:keep-dot-prefix
                                #:where where
                                #:limit limit
                                #:order-by order-by
@@ -112,6 +113,7 @@
             (~optional (~and #:single-ret-val/f single/f-kw))
             (~optional (~and #:provide provide?))
             (~optional (~and #:keys-strip-prefix keys-strip-prefix-kw))
+            (~optional (~and #:keep-dot-prefix keep-dot-prefix-kw))
             (~optional (~and #:kebab-case kebab-case?))
             (~optional (~and #:camel-case camel-case?))
             (~optional (~and #:snake-case snake-case?))
@@ -136,7 +138,8 @@
                                     [#,(not (false? (attribute snake-case?))) any->snake-case]
                                     [else (λ (key) key)])]
                     [keys-strip-prefix? (if (attribute keys-strip-prefix-kw) #t #f)]
-                    [datadef-part-list #'(parse-datadef-parts dd case-thunk keys-strip-prefix?)]
+                    [keep-dot-prefix? (if (attribute keep-dot-prefix-kw) #t #f)]
+                    [datadef-part-list #'(parse-datadef-parts dd case-thunk keys-strip-prefix? keep-dot-prefix?)]
                     [datadef-doc #'(map (λ (dp) (get-datadef-part-key (datadef-part-key dp) #:doc #t)) datadef-part-list)]
                     [format-func-ret-type (if (or (attribute single-kw)
                                                   (attribute single/f-kw))
@@ -393,8 +396,31 @@
                       #:single-ret-val
                       #:keys-strip-prefix)
       (with-mock-data ((datadef:test  (0)))
-        (check-equal? (hash-keys (datadef:test->result) #t)
-                      '(column1 column2))))
+                      (check-equal? (hash-keys (datadef:test->result) #t)
+                                    '(column1 column2))))
+    (test-case
+      "keep-dot-prefix keyword"
+      (define-datadef test
+                      '((table.column1 _ (val1)) (table.column2 _ (val2)))
+                      #:ret-type hash
+                      #:from "table"
+                      #:single-ret-val
+                      #:keep-dot-prefix)
+      (with-mock-data ((datadef:test  (0)))
+                      (check-equal? (hash-keys (datadef:test->result) #t)
+                                    '(table.column1 table.column2))))
+    (test-case
+      "SQL prefix to underscore keyword"
+      (define-datadef test
+                      '((a.column1 _ (val1))
+                        (b.column2 _ (val2))
+                        (c.d.column3 _ (val3)))
+                      #:ret-type hash
+                      #:from "table"
+                      #:single-ret-val)
+      (with-mock-data ((datadef:test  (0)))
+                      (check-equal? (hash-keys (datadef:test->result) #t)
+                                    '(a_column1 b_column2 c_d_column3))))
     (test-case
       "kebab case"
       (define-datadef test
