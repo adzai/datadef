@@ -10,6 +10,7 @@
                   scribble/manual)
          "lib/test-utils.rkt"
          "lib/utils.rkt"
+         "lib/pooling.rkt"
          (for-syntax racket/syntax
                      syntax/parse
                      racket/base))
@@ -77,6 +78,10 @@
     connection and deciding if data should be mocked.
 
     })
+  create-connection-pool
+  get-connection
+  return-connection
+  close-connection
 )
 
 ; SPEC
@@ -148,18 +153,18 @@
                                               (for/vector ([v d])
                                                 (with-handlers ([exn:fail? (λ (e) v)])(eval v _ns)))))
                                           (with-connection-name #:connection user-conn
-                                                                (apply (car func-name-lst) (append (list (connection-param) stmt)
+                                                                (displayln (connection-param)) (apply (car func-name-lst) (append (list (db-connection-raw-connection (connection-param)) stmt)
                                                                                                    args))))))])
                    #'(begin
                        (define-namespace-anchor _a)
                        (define _ns (namespace-anchor->namespace _a))
                        (define connection-param (make-parameter #f))
-                       (define connection-pool-param (make-parameter #f))
+                       (define connection-pool-param (make-parameter (create-connection-pool conn-func)))
                        (define-values query-func-names (apply values (map (λ (func-name-lst) (query-func func-name-lst connection-param))
                                                                           (map (λ (x) (cons (eval x _ns) x)) (syntax->datum #'query-funcs)))))
                        (define (disconnect-func)
-                         (when (connection? (connection-param))
-                           (disconnect (connection-param))
+                         (when (db-connection? (connection-param))
+                           (return-connection (connection-param) (connection-pool-param))
                            (connection-param #f)))
                        (define-syntax (with-connection-name stx)
                          (syntax-parse stx
@@ -170,7 +175,7 @@
                                                            [(db-mocking-data) #f]
                                                            [user-conn user-conn]
                                                            [owned
-                                                             (conn-func (connection-pool-param))]
+                                                             (get-connection (connection-pool-param))]
                                                            [else (connection-param)])])
                                           (parameterize ([connection-param the-conn])
                                             (with-handlers ([exn:fail? exn-fail-thunk])
@@ -181,7 +186,7 @@
                        (define-syntax-rule (with-transaction-name thunk rest-transaction)
                          (with-connection-name
                            (call-with-transaction
-                             (connection-param)
+                             (db-connection-raw-connection (connection-param))
                              (λ () thunk rest-transaction))))
                        (define (prepare-name stmt)
-                         (prepare (connection-param) stmt))))]))
+                         (prepare (db-connection-raw-connection (connection-param)) stmt))))]))
