@@ -38,7 +38,7 @@
                    db
                    datadef)
           (db-funcs-init dtb
-                          #:connection-func (λ ()))
+                          #:connection-func (λ () (void)))
           (test-case
               "Testing list of hash and empty list return type"
               (define-datadef test
@@ -153,7 +153,7 @@
                                               (for/vector ([v d])
                                                 (with-handlers ([exn:fail? (λ (e) v)])(eval v _ns)))))
                                           (with-connection-name #:connection user-conn
-                                                                (displayln (connection-param)) (apply (car func-name-lst) (append (list (db-connection-raw-connection (connection-param)) stmt)
+                                                                (apply (car func-name-lst) (append (list (db-connection-raw-connection (connection-param)) stmt)
                                                                                                    args))))))])
                    #'(begin
                        (define-namespace-anchor _a)
