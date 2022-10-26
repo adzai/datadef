@@ -9,6 +9,7 @@
          db-connection?
          db-connection-raw-connection)
 
+; TODO "with" type macros to handle counters/lease status when allocating/leasing/returning/disconnecting
 ; TODO cleanup counters
 (struct connection-pool (connections-acquired connections-released connections max-connections connection-thunk allocated-connections-number) #:transparent #:mutable)
 
