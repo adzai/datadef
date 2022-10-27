@@ -37,8 +37,7 @@
           (require rackunit
                    db
                    datadef)
-          (db-funcs-init dtb
-                          #:connection-func (λ () (void)))
+          (db-funcs-init dtb)
           (test-case
               "Testing list of hash and empty list return type"
               (define-datadef test
