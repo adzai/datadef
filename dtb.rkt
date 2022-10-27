@@ -65,7 +65,7 @@
           ]})
   db-mocking-data
   (form-doc
-    (db-funcs-init prefix #:connection-func conn-func
+    (db-funcs-init prefix
                          [#:exn-fail-thunk exn-fail-thunk])
     #:contracts ([prefix any/c]
                  [connection-func (-> connection-pool? connection?)])
@@ -112,7 +112,7 @@
 
 (define-syntax (db-funcs-init stx)
   (syntax-parse stx
-    [(_ prefix (~seq #:connection-func conn-func)
+    [(_ prefix
         (~seq
           (~or
             (~optional (~seq #:exn-fail-thunk exn-fail-thunk)
@@ -126,6 +126,7 @@
                     [connection-pool-param (create-identifier stx #'prefix "connection-pool")]
                     [prepare-name (create-identifier stx #'prefix "prepare")]
                     [disconnect-func (create-identifier stx #'prefix "disconnect!")]
+                    [start-func (create-identifier stx #'prefix "start!")]
                     [with-connection-name (datum->syntax stx (string->symbol (format "with-~a-connection" (syntax->datum #'prefix))))]
                     [with-transaction-name (datum->syntax stx (string->symbol (format "with-~a-transaction" (syntax->datum #'prefix))))]
                     [prefix-str (format "~a" (syntax->datum #'prefix))]
@@ -159,7 +160,9 @@
                        (define-namespace-anchor _a)
                        (define _ns (namespace-anchor->namespace _a))
                        (define connection-param (make-parameter #f))
-                       (define connection-pool-param (make-parameter (create-connection-pool conn-func)))
+                       (define connection-pool-param (make-parameter #f))
+                       (define (start-func connection-thunk #:max-connections [max-connections +inf.0])
+                         (connection-pool-param (create-connection-pool connection-thunk #:max-connections max-connections)))
                        (define-values query-func-names (apply values (map (λ (func-name-lst) (query-func func-name-lst connection-param))
                                                                           (map (λ (x) (cons (eval x _ns) x)) (syntax->datum #'query-funcs)))))
                        (define (disconnect-func)

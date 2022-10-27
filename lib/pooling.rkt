@@ -15,6 +15,8 @@
 
 (struct db-connection (raw-connection leased? lease-counter) #:transparent #:mutable)
 
+(struct exn:pool-limit-reached exn:fail ())
+
 (define (make-db-connection-for-lease raw-connection)
   (db-connection raw-connection #t 1))
 
@@ -26,7 +28,9 @@
 
 (define (get-unused-conn/f conn-lst)
   (if
-    (empty? conn-lst) #f
+    (empty? conn-lst) (raise (exn:pool-limit-reached
+                               ; TODO could use db prefix
+                               "Connection pool limit reached" (current-continuation-marks)))
     (let ([conn (car conn-lst)])
     (cond
       [(not (db-connection-leased? conn))
@@ -41,19 +45,26 @@
   ; TODO differentiate between network error / pool limit reached for sleep
   ; TODO Timeout on sema?
   (let loop ([retries retries])
-    (define maybe-conn
-      (call-with-semaphore
-        pool-sema
-        (thunk
-          ; TODO with-handlers
-          (or (get-unused-conn/f (connection-pool-connections pool))
-              (create-new-connection pool)))))
-    (or maybe-conn (cond
-                     [(> retries 0)
-                      (sleep sleep-on-retry-seconds)
-                      (loop (sub1 retries))]
-                     ; TODO better error
-                     [else (error "Couldn't get connection")]))))
+    (call-with-semaphore
+      pool-sema
+      (thunk
+        ; TODO with-handlers
+        (with-handlers ([exn:pool-limit-reached?
+                          (λ (e)
+                             (displayln (exn-message e))
+                             (cond
+                               [(> retries 0)
+                                (sleep sleep-on-retry-seconds)
+                                (loop (sub1 retries))]
+                               [else (raise e)]))]
+                        [exn:fail? (λ (e) (displayln (exn-message e))
+                                      (cond
+                                        [(> retries 0)
+                                         (sleep sleep-on-retry-seconds)
+                                         (loop (sub1 retries))]
+                                        [else (raise e)]))])
+                       (or (get-unused-conn/f (connection-pool-connections pool))
+                           (create-new-connection pool)))))))
 
 (define (create-new-connection pool)
   (if (< (connection-pool-allocated-connections-number pool)
