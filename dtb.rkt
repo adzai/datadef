@@ -67,7 +67,7 @@
     (db-funcs-init prefix
                          [#:exn-fail-thunk exn-fail-thunk])
     #:contracts ([prefix any/c]
-                 [connection-func (-> connection-pool? connection?)])
+                 [connection-func (-> db-connection-pool? connection?)])
     @{
     Creates wrappers around @hyperlink["https://docs.racket-lang.org/db/query-api.html" "db"]
     query functions with the provided prefix. For
@@ -77,7 +77,7 @@
     connection and deciding if data should be mocked.
 
     })
-  create-connection-pool
+  create-db-connection-pool
   get-connection
   return-connection
   close-connection
@@ -160,14 +160,20 @@
                        (define _ns (namespace-anchor->namespace _a))
                        (define connection-param (make-parameter #f))
                        (define connection-pool-param (make-parameter #f))
-                       (define (start-func connection-thunk #:max-connections [max-connections +inf.0])
-                         (connection-pool-param (create-connection-pool (procedure-rename connection-thunk (string->symbol (format "~a-connection-thunk" prefix-str)))  #:max-connections max-connections)))
+                       (define (start-func connection-thunk #:max-connections [max-connections +inf.0]
+                                                  #:retries [retries 0]
+                                                  #:sleep-on-retry [sleep-on-retry-seconds 1])
+                         (connection-pool-param (create-db-connection-pool
+                                                  (procedure-rename connection-thunk (string->symbol (format "~a-connection-thunk" prefix-str)))
+
+                                                  #:max-connections max-connections #:retries retries
+                                                  #:sleep-on-retry sleep-on-retry-seconds)))
                        (define-values query-func-names (apply values (map (λ (func-name-lst) (query-func func-name-lst connection-param))
                                                                           (map (λ (x) (cons (eval x _ns) x)) (syntax->datum #'query-funcs)))))
                        ; TODO mirror return, disconnect etc with prefix
                        (define (disconnect-func)
                          (when (db-connection? (connection-param))
-                           (return-connection (connection-param) (connection-pool-param) prefix-str)
+                           (return-connection (connection-param) (connection-pool-param))
                            (connection-param #f)))
                        (define-syntax (with-connection-name stx)
                          (syntax-parse stx
@@ -193,3 +199,54 @@
                              (λ () thunk rest-transaction))))
                        (define (prepare-name stmt)
                          (prepare (db-connection-raw-connection (connection-param)) stmt))))]))
+
+
+(module+ test
+  (require rackunit
+           db)
+  (db-funcs-init dtb #:exn-fail-thunk (λ (e) (close-connection (dtb-connection) (dtb-connection-pool))))
+  (test-case "Pool limit reached"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections 1)
+    (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+    (sleep 0.1)
+    (check-exn exn:pool-limit-reached?
+               (thunk (dtb-query-rows "SELECT * FROM test_table")))
+    (thread-wait t))
+  (test-case "Pool limit not reached"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections 2)
+    (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+    (sleep 0.1)
+    (check-not-exn
+               (thunk (dtb-query-rows "SELECT * FROM test_table")))
+    (thread-wait t))
+  (test-case "Retry logic"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections 1
+                #:retries 5
+                #:sleep-on-retry 1)
+    (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+    (sleep 0.1)
+    (check-equal?
+      (dtb-query-rows "SELECT * FROM test_table") '(#(1)))
+    (thread-wait t))
+  (test-case "Check that only 1 connection was allocated"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db"))
+                #:retries 5
+                #:sleep-on-retry 1)
+    (dtb-query-rows "SELECT * FROM test_table")
+    (dtb-query-rows "SELECT * FROM test_table")
+    (dtb-query-rows "SELECT * FROM test_table")
+    (dtb-query-rows "SELECT * FROM test_table")
+    (check-equal? (db-connection-pool-connections-acquired (dtb-connection-pool)) 1))
+  (test-case "Check that 2 connections were allocated"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0)
+    (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+    (sleep 0.1)
+    (dtb-query-rows "SELECT * FROM test_table")
+    (thread-wait t)
+    (check-equal? (db-connection-pool-connections-acquired (dtb-connection-pool)) 2))
+  (test-case "Close connection via fail thunk"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0)
+    (with-dtb-connection (error "TEST"))
+    (check-equal? (db-connection-pool-allocated-connections-number (dtb-connection-pool)) 0)
+    (check-equal? (length (db-connection-pool-connections (dtb-connection-pool))) 0))
+)
