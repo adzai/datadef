@@ -161,12 +161,13 @@
                        (define connection-param (make-parameter #f))
                        (define connection-pool-param (make-parameter #f))
                        (define (start-func connection-thunk #:max-connections [max-connections +inf.0])
-                         (connection-pool-param (create-connection-pool connection-thunk #:max-connections max-connections)))
+                         (connection-pool-param (create-connection-pool (procedure-rename connection-thunk (string->symbol (format "~a-connection-thunk" prefix-str)))  #:max-connections max-connections)))
                        (define-values query-func-names (apply values (map (λ (func-name-lst) (query-func func-name-lst connection-param))
                                                                           (map (λ (x) (cons (eval x _ns) x)) (syntax->datum #'query-funcs)))))
+                       ; TODO mirror return, disconnect etc with prefix
                        (define (disconnect-func)
                          (when (db-connection? (connection-param))
-                           (return-connection (connection-param) (connection-pool-param))
+                           (return-connection (connection-param) (connection-pool-param) prefix-str)
                            (connection-param #f)))
                        (define-syntax (with-connection-name stx)
                          (syntax-parse stx
@@ -177,7 +178,7 @@
                                                            [(db-mocking-data) #f]
                                                            [user-conn user-conn]
                                                            [owned
-                                                             (get-connection (connection-pool-param))]
+                                                             (get-connection (connection-pool-param) #:prefix prefix-str)]
                                                            [else (connection-param)])])
                                           (parameterize ([connection-param the-conn])
                                             (with-handlers ([exn:fail? exn-fail-thunk])
