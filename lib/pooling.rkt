@@ -84,7 +84,7 @@
     (let ([conn (car conn-lst)])
       (cond
         [(not (db-connection-leased? conn))
-         (log-debug "[~a] Unused conn found in pool" prefix)
+         #| (log-debug "[~a] Unused conn found in pool" prefix) |#
          (set-db-connection-leased?! conn #t)
          (set-db-connection-lease-counter! conn (add1 (db-connection-lease-counter conn)))
          conn]
@@ -120,22 +120,27 @@
 
 (define (find-conn conn conn-lst)
   (if (empty? conn-lst)
-    (error "Connection not found in pool")
+    (begin
+      (log-error (format "Connection not found in pool; connection: ~a; conn-list: ~a" conn conn-lst))
+      #f)
     (if (equal? conn (car conn-lst))
       (car conn-lst)
       (find-conn conn (cdr conn-lst)))))
 
 (define (return-connection conn pool)
   (with-pool-semaphore-timeout pool
-    (set-db-connection-leased?! (find-conn conn (db-connection-pool-connections pool)) #f)))
+    (define conn-struct (find-conn conn (db-connection-pool-connections pool)))
+    (when conn-struct (set-db-connection-leased?! conn-struct #f))))
 
 (define (close-connection conn pool)
+  (log-info "Closing conn ~a, pool: ~a" conn pool)
   (with-pool-semaphore-timeout pool
     (define conn-struct (find-conn conn (db-connection-pool-connections pool)))
-    (disconnect (db-connection-raw-connection conn-struct))
-    (set-db-connection-pool-connections! pool (remove conn-struct (db-connection-pool-connections pool)))
-    (set-db-connection-pool-connections-released! pool (add1 (db-connection-pool-connections-released pool)))
-    (set-db-connection-pool-allocated-connections-number! pool (sub1 (db-connection-pool-allocated-connections-number pool)))))
+    (when conn-struct
+      (disconnect (db-connection-raw-connection conn-struct))
+      (set-db-connection-pool-connections! pool (remove conn-struct (db-connection-pool-connections pool)))
+      (set-db-connection-pool-connections-released! pool (add1 (db-connection-pool-connections-released pool)))
+      (set-db-connection-pool-allocated-connections-number! pool (sub1 (db-connection-pool-allocated-connections-number pool))))))
 
 (define (clear-pool pool)
   (map (λ (conn) (close-connection conn pool)) (db-connection-pool-connections pool)))

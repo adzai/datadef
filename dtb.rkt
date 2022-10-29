@@ -119,13 +119,15 @@
                        #:defaults ([exn-fail-thunk #'(λ (e) (raise e))])))))
      #:with rest-connection (quote-syntax ...)
      #:with rest-transaction (quote-syntax ...)
-     (with-syntax* ([query-funcs '(query-rows query-row query-list query query-exec query-maybe-row query-value query-maybe-value in-query)]
+     (with-syntax* ([query-funcs '(query-rows query-row query-list query query-exec query-maybe-row query-value query-maybe-value)]
                     [query-func-names (map (λ (name) (create-identifier stx #'prefix name))
                                            (syntax->datum #'query-funcs))]
                     [connection-param (create-identifier stx #'prefix "connection")]
                     [connection-pool-param (create-identifier stx #'prefix "connection-pool")]
                     [prepare-name (create-identifier stx #'prefix "prepare")]
+                    [in-query-name (create-identifier stx #'prefix "in-query")]
                     [return-func (create-identifier stx #'prefix "conn-return")]
+                    [close-func (create-identifier stx #'prefix "close-connection!")]
                     [start-func (create-identifier stx #'prefix "start!")]
                     [with-connection-name (datum->syntax stx (string->symbol (format "with-~a-connection" (syntax->datum #'prefix))))]
                     [with-transaction-name (datum->syntax stx (string->symbol (format "with-~a-transaction" (syntax->datum #'prefix))))]
@@ -180,6 +182,10 @@
                          (when (db-connection? (connection-param))
                            (return-connection (connection-param) (connection-pool-param))
                            (connection-param #f)))
+                       (define (close-func)
+                         (when (db-connection? (connection-param))
+                           (close-connection (connection-param) (connection-pool-param))
+                           (connection-param #f)))
                        (define-syntax (with-connection-name stx)
                          (syntax-parse stx
                            ((_ (~optional (~seq #:connection user-conn) #:defaults ([user-conn #'#f])) body rest-connection)
@@ -202,6 +208,11 @@
                            (call-with-transaction
                              (db-connection-raw-connection (connection-param))
                              (λ () thunk rest-transaction))))
+                       (define (in-query-name #:fetch (fetch #f) stmt . args)
+                         (with-connection-name
+                           (if fetch
+                             (apply in-query (db-connection-raw-connection (connection-param)) stmt (flatten args) #:fetch fetch)
+                             (apply in-query (db-connection-raw-connection (connection-param)) stmt (flatten args)))))
                        (define (prepare-name stmt)
                          (prepare (db-connection-raw-connection (connection-param)) stmt))))]))
 
