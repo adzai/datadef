@@ -10,6 +10,7 @@
                   scribble/manual)
          "lib/test-utils.rkt"
          "lib/utils.rkt"
+         "lib/pooling.rkt"
          (for-syntax racket/syntax
                      syntax/parse
                      racket/base))
@@ -36,8 +37,7 @@
           (require rackunit
                    db
                    datadef)
-          (db-funcs-init dtb
-                          #:connection-func (λ ()))
+          (db-funcs-init dtb)
           (test-case
               "Testing list of hash and empty list return type"
               (define-datadef test
@@ -64,10 +64,10 @@
           ]})
   db-mocking-data
   (form-doc
-    (db-funcs-init prefix #:connection-func conn-func
+    (db-funcs-init prefix
                          [#:exn-fail-thunk exn-fail-thunk])
     #:contracts ([prefix any/c]
-                 [connection-func (-> connection-pool? connection?)])
+                 [connection-func (-> db-connection-pool? connection?)])
     @{
     Creates wrappers around @hyperlink["https://docs.racket-lang.org/db/query-api.html" "db"]
     query functions with the provided prefix. For
@@ -77,6 +77,11 @@
     connection and deciding if data should be mocked.
 
     })
+  create-db-connection-pool
+  get-connection
+  return-connection
+  close-connection
+  clear-pool
 )
 
 ; SPEC
@@ -107,20 +112,23 @@
 
 (define-syntax (db-funcs-init stx)
   (syntax-parse stx
-    [(_ prefix (~seq #:connection-func conn-func)
+    [(_ prefix
         (~seq
           (~or
             (~optional (~seq #:exn-fail-thunk exn-fail-thunk)
                        #:defaults ([exn-fail-thunk #'(λ (e) (raise e))])))))
      #:with rest-connection (quote-syntax ...)
      #:with rest-transaction (quote-syntax ...)
-     (with-syntax* ([query-funcs '(query-rows query-row query-list query query-exec query-maybe-row query-value query-maybe-value in-query)]
+     (with-syntax* ([query-funcs '(query-rows query-row query-list query query-exec query-maybe-row query-value query-maybe-value)]
                     [query-func-names (map (λ (name) (create-identifier stx #'prefix name))
                                            (syntax->datum #'query-funcs))]
                     [connection-param (create-identifier stx #'prefix "connection")]
                     [connection-pool-param (create-identifier stx #'prefix "connection-pool")]
                     [prepare-name (create-identifier stx #'prefix "prepare")]
-                    [disconnect-func (create-identifier stx #'prefix "disconnect!")]
+                    [in-query-name (create-identifier stx #'prefix "in-query")]
+                    [return-func (create-identifier stx #'prefix "conn-return")]
+                    [close-func (create-identifier stx #'prefix "close-connection!")]
+                    [start-func (create-identifier stx #'prefix "start!")]
                     [with-connection-name (datum->syntax stx (string->symbol (format "with-~a-connection" (syntax->datum #'prefix))))]
                     [with-transaction-name (datum->syntax stx (string->symbol (format "with-~a-transaction" (syntax->datum #'prefix))))]
                     [prefix-str (format "~a" (syntax->datum #'prefix))]
@@ -148,18 +156,38 @@
                                               (for/vector ([v d])
                                                 (with-handlers ([exn:fail? (λ (e) v)])(eval v _ns)))))
                                           (with-connection-name #:connection user-conn
-                                                                (apply (car func-name-lst) (append (list (connection-param) stmt)
+                                                                (apply (car func-name-lst) (append (list (db-connection-raw-connection (connection-param)) stmt)
                                                                                                    args))))))])
                    #'(begin
                        (define-namespace-anchor _a)
                        (define _ns (namespace-anchor->namespace _a))
                        (define connection-param (make-parameter #f))
                        (define connection-pool-param (make-parameter #f))
+                       (define (start-func connection-thunk #:max-connections [max-connections +inf.0]
+                                           #:pool-limit-retries [pool-retries 0]
+                                           #:conn-error-retries [conn-retries 0]
+                                           #:sleep-on-pool-limit-retry [sleep-on-pool-limit-retry-seconds 1]
+                                           #:sleep-on-conn-error-retry [sleep-on-conn-error-retry-seconds 1]
+                                           #:connection-timeout [conn-timeout 5])
+                         (connection-pool-param #f)
+                         (connection-pool-param (create-db-connection-pool
+                                                  (procedure-rename connection-thunk (string->symbol (format "~a-connection-thunk" prefix-str)))
+                                                  #:prefix prefix-str
+                                                  #:max-connections max-connections
+                                                  #:pool-limit-retries pool-retries
+                                                  #:conn-error-retries conn-retries
+                                                  #:sleep-on-pool-limit-retry sleep-on-pool-limit-retry-seconds
+                                                  #:sleep-on-conn-error-retry sleep-on-conn-error-retry-seconds
+                                                  #:connection-timeout conn-timeout)))
                        (define-values query-func-names (apply values (map (λ (func-name-lst) (query-func func-name-lst connection-param))
                                                                           (map (λ (x) (cons (eval x _ns) x)) (syntax->datum #'query-funcs)))))
-                       (define (disconnect-func)
-                         (when (connection? (connection-param))
-                           (disconnect (connection-param))
+                       (define (return-func)
+                         (when (db-connection? (connection-param))
+                           (return-connection (connection-param) (connection-pool-param))
+                           (connection-param #f)))
+                       (define (close-func)
+                         (when (db-connection? (connection-param))
+                           (close-connection (connection-param) (connection-pool-param))
                            (connection-param #f)))
                        (define-syntax (with-connection-name stx)
                          (syntax-parse stx
@@ -170,18 +198,107 @@
                                                            [(db-mocking-data) #f]
                                                            [user-conn user-conn]
                                                            [owned
-                                                             (conn-func (connection-pool-param))]
+                                                             (get-connection (connection-pool-param))]
                                                            [else (connection-param)])])
                                           (parameterize ([connection-param the-conn])
                                             (with-handlers ([exn:fail? exn-fail-thunk])
                                                            (let ([ret ((thunk body rest-connection))])
                                                              (when owned
-                                                               (disconnect-func))
+                                                               (return-func))
                                                              ret))))))))
                        (define-syntax-rule (with-transaction-name thunk rest-transaction)
                          (with-connection-name
                            (call-with-transaction
-                             (connection-param)
+                             (db-connection-raw-connection (connection-param))
                              (λ () thunk rest-transaction))))
+                       (define (in-query-name #:fetch (fetch #f) stmt . args)
+                         (with-connection-name
+                           (if fetch
+                             (apply in-query (db-connection-raw-connection (connection-param)) stmt (flatten args) #:fetch fetch)
+                             (apply in-query (db-connection-raw-connection (connection-param)) stmt (flatten args)))))
                        (define (prepare-name stmt)
-                         (prepare (connection-param) stmt))))]))
+                         (prepare (db-connection-raw-connection (connection-param)) stmt))))]))
+
+
+(module+ test
+  (require rackunit
+           db)
+  (db-funcs-init dtb #:exn-fail-thunk (λ (e) (close-connection (dtb-connection) (dtb-connection-pool)) (raise e)))
+  (db-funcs-init dtb2 #:exn-fail-thunk (λ (e) (close-connection (dtb2-connection) (dtb2-connection-pool))))
+  (test-case "Pool limit reached"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections 1)
+    (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+    (sleep 0.1)
+    (check-exn exn:pool-limit-reached?
+               (thunk (dtb-query-rows "SELECT * FROM test_table")))
+    (thread-wait t))
+  (test-case "Pool limit not reached"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections 2)
+    (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+    (sleep 0.1)
+    (check-not-exn
+               (thunk (dtb-query-rows "SELECT * FROM test_table")))
+    (thread-wait t))
+  (test-case "Retry logic"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections 1
+                #:pool-limit-retries 10
+                #:sleep-on-pool-limit-retry 0.5
+                #:conn-error-retries 5
+                #:sleep-on-conn-error-retry 2)
+    (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+    (sleep 0.1)
+    (check-equal?
+      (dtb-query-rows "SELECT * FROM test_table") '(#(1)))
+    (thread-wait t))
+  (test-case "Only 1 connection was allocated and reused"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db"))
+                #:pool-limit-retries 5
+                #:sleep-on-pool-limit-retry 1)
+    (dtb-query-rows "SELECT * FROM test_table")
+    (dtb-query-rows "SELECT * FROM test_table")
+    (dtb-query-rows "SELECT * FROM test_table")
+    (dtb-query-rows "SELECT * FROM test_table")
+    (check-equal? (db-connection-pool-connections-acquired (dtb-connection-pool)) 1))
+  (test-case "2 connections were allocated"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0)
+    (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+    (sleep 0.1)
+    (dtb-query-rows "SELECT * FROM test_table")
+    (thread-wait t)
+    (check-equal? (db-connection-pool-connections-acquired (dtb-connection-pool)) 2))
+  (test-case "Close connection via fail thunk"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0)
+    (with-handlers ([exn:fail? (λ (e) (void))]) (with-dtb-connection (error "TEST")))
+    (check-equal? (db-connection-pool-allocated-connections-number (dtb-connection-pool)) 0)
+    (check-equal? (length (db-connection-pool-connections (dtb-connection-pool))) 0))
+  (test-case "2 pools"
+    (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0 #:pool-limit-retries 10)
+    (dtb2-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0 #:pool-limit-retries 10)
+    (dtb-query-rows "SELECT * FROM test_table")
+    (dtb2-query-rows "SELECT * FROM test_table")
+    (check-equal? (db-connection-pool-allocated-connections-number (dtb-connection-pool)) 1)
+    (check-equal? (db-connection-pool-allocated-connections-number (dtb2-connection-pool)) 1))
+  (test-case "All connections were cleared"
+      (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0)
+      (define t (thread (thunk (with-dtb-connection (sleep 0.2) (dtb-query-value "SELECT value FROM test_table")))))
+      (sleep 0.1)
+      (dtb-query-rows "SELECT * FROM test_table")
+      (thread-wait t)
+      (check-equal? (db-connection-pool-allocated-connections-number (dtb-connection-pool)) 2)
+      (clear-pool (dtb-connection-pool))
+      (check-equal? (db-connection-pool-allocated-connections-number (dtb-connection-pool)) 0))
+  (test-case "Nested exceptions"
+      (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0)
+      (struct exn:test exn:fail ())
+      (check-exn exn:test? (thunk (with-dtb-connection (with-dtb-connection (raise (exn:test "Exception message" (current-continuation-marks))))))))
+  (test-case "Remove disconnected connection instead of returning to pool"
+      (dtb-start! (thunk (sqlite3-connect #:database "test-utils/test.db")) #:max-connections +inf.0)
+      (with-dtb-connection (disconnect (db-connection-raw-connection (dtb-connection))))
+      (check-equal? (db-connection-pool-allocated-connections-number (dtb-connection-pool)) 0)
+      (with-dtb-connection (void))
+      (check-equal? (db-connection-pool-allocated-connections-number (dtb-connection-pool)) 1))
+  (test-case "Retries on bad connection thunk"
+      (with-handlers ([exn:fail? (λ (e) (void))]) (dtb-start! (thunk (sleep 100)) #:conn-error-retries 3 #:sleep-on-conn-error-retry 0.1
+                                                              #:connection-timeout 0.1))
+      (check-false (dtb-connection-pool)))
+)
