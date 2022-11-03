@@ -67,7 +67,7 @@
     (db-funcs-init prefix
                          [#:exn-fail-thunk exn-fail-thunk])
     #:contracts ([prefix any/c]
-                 [connection-func (-> db-connection-pool? connection?)])
+                 [exn-fail-thunk (-> exn? any)])
     @{
     Creates wrappers around @hyperlink["https://docs.racket-lang.org/db/query-api.html" "db"]
     query functions with the provided prefix. For
