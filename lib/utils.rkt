@@ -174,15 +174,15 @@
        (define 3rd (if (>= len 3) (let ([val (caddr dd)]) (if (list? val) val (list val))) #f))
        (define 4th (if (= len 4) (cadddr dd) #f))
        (datadef-part 1st 2nd 3rd 4th)]
-    [(symbol? dd)
+    [(or (string? dd) (symbol? dd))
      (datadef-part dd
                    (case-thunk
                      (let ([after-strip-key (strip-prefix dd)])
                        (if keep-dot-prefix?
                          after-strip-key
-                         (string->symbol (string-replace (symbol->string after-strip-key) "." "_")))))
+                         (string->symbol (string-replace (~a after-strip-key) "." "_")))))
                    #f #f)]
-    [else (error (format "Expected list of a symbol, got ~v" dd))])))
+    [else (error (format "Expected list, symbol or a string, got ~v" dd))])))
 
 (define/contract (register-conversion! pred proc)
   (-> symbol? (-> any/c any) void?)
