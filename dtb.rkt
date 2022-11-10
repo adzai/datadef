@@ -67,7 +67,7 @@
     (db-funcs-init prefix
                          [#:exn-fail-thunk exn-fail-thunk])
     #:contracts ([prefix any/c]
-                 [exn-fail-thunk (-> exn? any)])
+                 [exn-fail-thunk (-> exn? (listof vector?))])
     @{
     Creates wrappers around @hyperlink["https://docs.racket-lang.org/db/query-api.html" "db"]
     query functions with the provided prefix. For
@@ -201,7 +201,7 @@
                                                              (get-connection (connection-pool-param))]
                                                            [else (connection-param)])])
                                           (parameterize ([connection-param the-conn])
-                                            (with-handlers ([exn:fail? exn-fail-thunk])
+                                            (with-handlers ([exn:fail? (λ (e) (and (exn-fail-thunk e) (list)))])
                                                            (let ([ret ((thunk body rest-connection))])
                                                              (when owned
                                                                (return-func))
