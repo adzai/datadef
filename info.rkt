@@ -2,7 +2,8 @@
 
 (define collection "datadef")
 
-(define deps '("db-lib"
+(define deps '("sandbox-lib"
+               "db-lib"
                "web-server-lib"
                "base" "scribble-lib"))
 
